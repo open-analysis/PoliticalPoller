@@ -13,6 +13,6 @@ Utilize the `robots.txt` when scraping
 	4. theballotbrief.com
 	5. ballotmatch.org
 3. News sites
-  1. Local news organizations
-  2. State news organizations
-  3. National news organizations
+	1. Local news organizations
+	2. State news organizations
+	3. National news organizations

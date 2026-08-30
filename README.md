@@ -1,5 +1,5 @@
 # Project Overview
-Centralized site grab upcoming politician information 
+Centralized site grab upcoming politician information \
 **NOTE:** This is is not comprehensive list of information about any given political candidate, nor an endorsement any candidate 
 
 ## Support
@@ -12,5 +12,5 @@ Open issues for:
 
 --- 
 
-# Developer
+# Developer Support
 [Buy me a Ko-Fi](https://ko-fi.com/opnanalysis)
