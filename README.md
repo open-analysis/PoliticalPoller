@@ -7,6 +7,7 @@ Open issues for:
 - Missing candidates
 - Missing election information
 - Missing news sites
+- Add user to collaborators list
 - Problems with the service
 - Efficiency improvements for the service
 
