@@ -16,6 +16,7 @@ It may also include a high level description of algorithm if necessary. \
 The description will include the input/output parameters. \
 The owner will be demarked with their name (or Github username). This may be skipped for methods. \
 A backup or team may also be denoted if applicable. This may be skipped for methods. \
+AI/LLM usage must be disclosed on if used. Model information should be provided. \
 #### Example
 ```python
 """
@@ -23,6 +24,7 @@ Description: This function reads the input politician's file and returns a list 
 Param[in] input_file:       Input file path as a string to be read
 Return List:                List of the politician's information
 Owner: @opnanalysis
+LLM: glad0s-potato
 """
 def read_politician_file(input_file:str) -> List:
 ```
@@ -31,11 +33,13 @@ Each class will have a description of the intention of the class and the key var
 The description will include the constructor and necessary input parameters for the class. \
 The owner will be demarked with their name (or Github username). \
 A backup or team may also be denoted if applicable. \
+AI/LLM usage must be disclosed on if used. Model information maybe provided \
 #### Example
 ```python
 """
 Description: This class creates and stores information for a politician. 
 Owner: @opnanalysis
+LLM: None
 """
 class politician():
 ```
