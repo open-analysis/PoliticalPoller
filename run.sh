@@ -9,7 +9,7 @@ ROOT_DIR=$(git rev-parse --show-toplevel)
 source ${ROOT_DIR}/venv/bin/activate
 
 # Install pip modules
-pip3 install requests beautifulsoup4 playwright playwright-stealth
+pip3 install requests beautifulsoup4 playwright playwright-stealth scrapy
 playwright install chromium
 # Run scripts
 python3 ${ROOT_DIR}/scraper/site_reader.py
