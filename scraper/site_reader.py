@@ -553,6 +553,156 @@ def read_page(input_webpage: str,
     return group_by_office(records)
 
 """
+Description: Runs the PoliticalPoller Scrapy project's NewsSpider for a
+    given configured site (see PoliticalPoller/site_configs.py) and returns
+    the scraped articles as a list of dicts.
+
+    Runs Scrapy out-of-process via `scrapy crawl`, rather than importing
+    CrawlerProcess in-process, so its Twisted reactor never has to share a
+    process with the synchronous Playwright browser calls used elsewhere
+    in this file -- both manage their own event loop and don't mix safely
+    in one process.
+Param[in] site:         Site key from PoliticalPoller/site_configs.py,
+    e.g. "cnn"
+Param[in] project_dir:  Path to the PoliticalPoller project (the directory
+    containing scrapy.cfg)
+Param[in] timeout:      Max seconds to let the crawl run before killing it
+Param[out] articles:    List of dicts (title, url, site, published_date,
+    scraped_at), one per scraped article
+Owner: @opnanalysis
+LLM: claude-sonnet-5
+"""
+def run_news_spider(
+    site: str,
+    project_dir: str = "PoliticalPoller",
+    timeout: int = 1800,
+) -> list:
+    import subprocess
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".jsonl", delete=False
+    ) as tmp:
+        output_path = tmp.name
+
+    cmd = [
+        "scrapy", "crawl", "news",
+        "-a", f"site={site}",
+        "-o", output_path,
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=project_dir,
+            timeout=timeout,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"scrapy crawl news -a site={site} did not finish within "
+            f"{timeout}s."
+        ) from e
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"scrapy crawl news -a site={site} failed "
+            f"(exit {result.returncode}):\n{result.stderr}"
+        )
+
+    articles = []
+    with open(output_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                articles.append(json.loads(line))
+
+    return articles
+
+"""
+Description: Runs the appropriate crawl path for a configured government
+    election/candidate site and returns scraped candidates as a list of
+    dicts, regardless of whether the site needs Scrapy or a real browser.
+
+    Dispatches on election_site_configs.py's "requires_browser" flag:
+      - True  (e.g. "mn"): fetches with fetch_soup_persistent_browser()
+        (this file's Playwright + stealth + manual-CAPTCHA-solve path),
+        then parses the resulting HTML with the *same* table parser
+        ElectionSpider would use, via election_table_parsers.parse_table().
+      - False: runs `scrapy crawl elections -a site=<site>` out-of-process,
+        for the same reactor-isolation reason run_news_spider() does.
+
+    Either path returns rows in the same shape, so callers don't need to
+    know which fetch strategy a given site required.
+Param[in] site:          Site key from
+    PoliticalPoller/election_site_configs.py, e.g. "mn"
+Param[in] project_dir:   Path to the PoliticalPoller project (only used
+    for the Scrapy path)
+Param[in] headless:      Only used for the browser path; pass False once
+    if a site starts blocking, to solve a CAPTCHA manually
+Param[in] timeout:       Max seconds for the Scrapy path before killing it
+Param[out] candidates:   List of dicts: office_level, office,
+    candidate_name, party, website, file_date
+Owner: @opnanalysis
+LLM: claude-sonnet-5
+"""
+def run_election_spider(
+    site: str,
+    project_dir: str = "PoliticalPoller",
+    headless: bool = True,
+    timeout: int = 1800,
+) -> list:
+    import subprocess
+    import tempfile
+
+    sys.path.append(project_dir)
+    from election_site_configs import get_election_site_config
+    from election_table_parsers import parse_table
+
+    config = get_election_site_config(site)
+
+    if config.get("requires_browser"):
+        soup = fetch_soup_persistent_browser(
+            config["start_urls"][0], headless=headless
+        )
+        from parsel import Selector
+        selector = Selector(text=str(soup))
+        return parse_table(
+            selector, config["table_parser"], config.get("table_parser_config", {})
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tmp:
+        output_path = tmp.name
+
+    cmd = ["scrapy", "crawl", "elections", "-a", f"site={site}", "-o", output_path]
+
+    try:
+        result = subprocess.run(
+            cmd, cwd=project_dir, timeout=timeout, capture_output=True, text=True
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"scrapy crawl elections -a site={site} did not finish within "
+            f"{timeout}s."
+        ) from e
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"scrapy crawl elections -a site={site} failed "
+            f"(exit {result.returncode}):\n{result.stderr}"
+        )
+
+    candidates = []
+    with open(output_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                candidates.append(json.loads(line))
+
+    return candidates
+
+"""
 Description: Finds political associations for a given politician
     - Office held/going for
     - State serving in
