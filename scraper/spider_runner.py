@@ -30,7 +30,7 @@ Param[in] candidate:  Candidate name to require in the title, or None
 Param[in] election:   Election name/cycle to require in the title (e.g.
     "2026 midterms"), or None
 Param[in] location:   State/location to require in the title, or None
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _article_matches(
@@ -68,7 +68,7 @@ Param[in] timeout:      Max seconds to let the crawl run before killing it
 Param[out] articles:    List of dicts (title, url, site, published_date,
     scraped_at), one per scraped article matching every given filter (or
     every scraped article, if no filters were given)
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def run_news_spider(
@@ -154,7 +154,7 @@ Param[in] timeout:       Max seconds for the Scrapy path before killing it
 Param[out] candidates:   List of dicts, each with: site, state,
     office_level, office, candidate_name, party, website, file_date,
     source_url, scraped_at
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def run_election_spider(
@@ -240,7 +240,7 @@ Param[out] summary:     Dict with "new_candidates" / "new_offices" /
     "updated_offices" (lists of labels), "unchanged" (a count),
     "collisions" (notes on any newly-detected same-name candidates -- see
     candidate_store.py), and "store" (the full merged store just saved)
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def sync_election_candidates(

@@ -11,7 +11,7 @@ Description: Spider subclass/item for data to return to caller for News sites.
 NewsArticleItem is intentionally generic (title/url/site/dates only) so the
 same spider and pipelines can be reused across many news sites instead of
 being hard-coded to one site's fields.
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 class NewsArticleItem(scrapy.Item):
@@ -28,7 +28,7 @@ Description: Spider subclass/item for data to return to caller for election site
 ElectionCandidateItem is intentionally generic (title/url/site/dates only) so the
 same spider and pipelines can be reused across many sites instead of
 being hard-coded to one site's fields.
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 class ElectionCandidateItem(scrapy.Item):

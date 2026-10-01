@@ -64,7 +64,7 @@ Description: Extracts the base URL (scheme + host, up through the first
 Param[in] url:  Full page URL
 Param[out] base_url:  The URL truncated at the first of .gov/.com/.org/
     .net found in it
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def get_base_url(url:str) -> str:
@@ -86,7 +86,7 @@ Description: Builds a requests.Session with full browser-like headers and
     and replayed on the real request.
 Param[out] session:  A requests.Session pre-loaded with browser headers
     and warm-up cookies
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def make_session(base_url: str) -> requests.Session:
@@ -111,7 +111,7 @@ Description: Fetches the candidate results page using a plain
 Param[in] url:      Page URI to fetch
 Param[in] session:  Optional pre-built session (falls back to
     make_session() if not provided)
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def fetch_soup(url: str, session: requests.Session = None) -> BeautifulSoup:
@@ -145,7 +145,7 @@ Description: Fetches the page by replaying a previously-solved session
 Param[in] url:          Page URI to fetch
 Param[in] cookie_file:  Path to the saved session JSON produced by
     capture_session.py
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def fetch_soup_cached_session(
@@ -204,7 +204,7 @@ DEFAULT_PROFILE_DIR = "playwright_profile"
 Description: Returns True if the given page HTML contains signs of a
     CAPTCHA/bot-protection challenge (e.g. "captcha" or "radware").
 Param[in] content:  Raw page HTML to inspect
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _looks_blocked(content: str) -> bool:
@@ -217,7 +217,7 @@ Description: Returns True if the given Playwright page is on the
     real results table -- used to detect when a manually-solved CAPTCHA
     has cleared.
 Param[in] page:  Live Playwright page object to inspect
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _looks_solved(page) -> bool:
@@ -243,7 +243,7 @@ Param[in] user_data_dir:        Folder to persist the browser profile in
 Param[in] headless:             Whether to run without a visible window
 Param[in] manual_wait_seconds:  Max seconds to wait for a manual CAPTCHA
     solve when headless=False and a block is detected
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def fetch_soup_persistent_browser(
@@ -321,7 +321,7 @@ Param[in] page_load_timeout_ms:       Timeout for page navigation/table
     wait, in milliseconds
 Param[in] extra_wait_if_blocked_s:    Extra seconds to wait and recheck if
     a CAPTCHA page is detected, in case it's a timed challenge
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def fetch_soup_playwright(
@@ -370,7 +370,7 @@ def fetch_soup_playwright(
 Description: Returns the stripped visible text of a <td>, or an empty
     string if the cell is None.
 Param[in] td:  BeautifulSoup <td> tag to read
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _cell_text(td) -> str:
@@ -382,7 +382,7 @@ Description: Extracts a candidate's website value from a <td>, preferring
     ignores empty or placeholder hrefs (e.g. "javascript:...", bare
     "http://").
 Param[in] td:  BeautifulSoup <td> tag containing the website cell
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _extract_website(td) -> str:
@@ -404,7 +404,7 @@ def _extract_website(td) -> str:
 Description: Returns the integer colspan attribute of a <td>, defaulting
     to 1 if missing or unparseable.
 Param[in] td:  BeautifulSoup <td> tag to read
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _colspan(td) -> int:
@@ -429,7 +429,7 @@ Description: Walks every <tr> in the parsed results page in document
 Param[in] soup:  Parsed BeautifulSoup of the results page
 Param[out] records:  Flat list of dicts, each with level, office, name,
     party, website, file_date
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def parse_candidates(soup: BeautifulSoup) -> list:
@@ -518,7 +518,7 @@ Description: Reshapes a flat list of candidate records into a nested dict
 Param[in] records:  Flat list of candidate dicts, as produced by
     parse_candidates
 Param[out] grouped:  Nested dict of { level: { office: [candidates] } }
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def group_by_office(records: list) -> dict:

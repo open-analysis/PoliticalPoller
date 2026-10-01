@@ -39,7 +39,7 @@ class NewsSpider(scrapy.Spider):
         allowed_domains/start_urls/link-selectors/article-URL pattern
         from it.
     Param[in] site:  News site key, e.g. "cnn"
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def __init__(self, site: str = None, *args, **kwargs):
@@ -61,7 +61,7 @@ class NewsSpider(scrapy.Spider):
         looks like an article, and always follows every configured
         index-link selector to keep crawling the sitemap/index hierarchy.
     Param[in] response:  The downloaded Response for a page
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def parse(self, response):
