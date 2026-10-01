@@ -20,9 +20,24 @@ Owner: @opnanalysis
 LLM: claude-sonnet-5
 """
 class NewsArticleValidationPipeline(object):
+    """
+    Description: Initializes the within-run URL-dedup set.
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def __init__(self):
         self.seen_urls = set()
 
+    """
+    Description: Validates and dedupes one NewsArticleItem as it passes
+        through the pipeline; drops it (raising DropItem) if it's missing
+        a title/url or its url was already seen this run.
+    Param[in] item:    The NewsArticleItem being processed
+    Param[in] spider:  The spider that yielded it
+    Param[out] item:   The same item, unchanged, if it passes validation
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def process_item(self, item, spider):
         if not item.get("title") or not item.get("url"):
             raise DropItem(f"Missing title or url: {item!r}")
@@ -43,9 +58,26 @@ Owner: @opnanalysis
 LLM: claude-sonnet-5
 """
 class ElectionCandidateValidationPipeline(object):
+    """
+    Description: Initializes the within-run (site, office, candidate_name)
+        dedup set.
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def __init__(self):
         self.seen = set()
 
+    """
+    Description: Validates and dedupes one ElectionCandidateItem as it
+        passes through the pipeline; drops it (raising DropItem) if it has
+        no candidate_name, or if this exact (site, office, candidate_name)
+        combination was already seen this run.
+    Param[in] item:    The ElectionCandidateItem being processed
+    Param[in] spider:  The spider that yielded it
+    Param[out] item:   The same item, unchanged, if it passes validation
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def process_item(self, item, spider):
         if not item.get("candidate_name"):
             raise DropItem(f"Missing candidate_name: {item!r}")

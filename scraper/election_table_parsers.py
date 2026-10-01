@@ -22,15 +22,32 @@ one; site_reader.py wraps fetched HTML text in one -- see
 LLM: claude-sonnet-5
 """
 
+from datetime import datetime, timezone
+
 from parsel import Selector
 
 
+"""
+Description: Returns the stripped, concatenated text of a td's full
+    subtree (via XPath string()), or an empty string if the cell is None.
+Param[in] td:  A parsel Selector for a single <td>
+Owner: @opnanalysis
+LLM: claude-sonnet-5
+"""
 def _cell_text(td) -> str:
     if td is None:
         return ""
     return (td.xpath("string(.)").get() or "").strip()
 
 
+"""
+Description: Returns the integer colspan attribute of a td, defaulting to
+    1 if missing or unparseable.
+Param[in] td:       A parsel Selector for a single <td>
+Param[in] default:  Value to return if colspan is missing/unparseable
+Owner: @opnanalysis
+LLM: claude-sonnet-5
+"""
 def _colspan(td, default: int = 1) -> int:
     try:
         return int(td.attrib.get("colspan", default))
@@ -38,6 +55,15 @@ def _colspan(td, default: int = 1) -> int:
         return default
 
 
+"""
+Description: Extracts a candidate's website value from a td, preferring
+    the href of an embedded <a> and falling back to the cell's visible
+    text; ignores empty/placeholder hrefs (e.g. "javascript:...", bare
+    "http://").
+Param[in] td:  A parsel Selector for a single <td>
+Owner: @opnanalysis
+LLM: claude-sonnet-5
+"""
 def _extract_website(td) -> str:
     if td is None:
         return ""
@@ -191,6 +217,20 @@ PARSERS = {
 }
 
 
+"""
+Description: Dispatches to the named table-parsing strategy
+    (PARSERS["colspan_hierarchy"] or PARSERS["simple_table"]) and returns
+    its parsed candidate rows.
+Param[in] selector:       A parsel Selector over the full page
+Param[in] parser_name:    Key into PARSERS, e.g. "colspan_hierarchy"
+Param[in] parser_config:  That parser's config dict (see
+    parse_colspan_hierarchy_table()/parse_simple_table() for the keys
+    each accepts)
+Param[out] records:       List of dicts (office_level, office,
+    candidate_name, party, website, file_date)
+Owner: @opnanalysis
+LLM: claude-sonnet-5
+"""
 def parse_table(selector: Selector, parser_name: str, parser_config: dict) -> list:
     try:
         parser = PARSERS[parser_name]
@@ -200,3 +240,31 @@ def parse_table(selector: Selector, parser_name: str, parser_config: dict) -> li
             f"{sorted(PARSERS)}"
         )
     return parser(selector, parser_config or {})
+
+
+def build_candidate_records(records: list, site: str, state: str, source_url: str) -> list:
+    """Stamps parse_table()'s raw rows (office_level/office/candidate_name/
+    party/website/file_date) with the same crawl metadata ElectionSpider
+    attaches to its items (site/state/source_url/scraped_at), so results
+    are shaped identically regardless of whether they were parsed from a
+    Scrapy response or from browser-fetched HTML. This is what keeps
+    run_election_spider()'s two code paths (Scrapy for open sites,
+    Playwright for bot-protected ones) returning the same thing.
+    LLM: claude-sonnet-5
+    """
+    scraped_at = datetime.now(timezone.utc).isoformat()
+    return [
+        {
+            "site": site,
+            "state": state,
+            "office_level": r.get("office_level"),
+            "office": r.get("office"),
+            "candidate_name": r.get("candidate_name"),
+            "party": r.get("party"),
+            "website": r.get("website"),
+            "file_date": r.get("file_date"),
+            "source_url": source_url,
+            "scraped_at": scraped_at,
+        }
+        for r in records
+    ]

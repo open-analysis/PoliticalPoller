@@ -28,8 +28,20 @@ from PoliticalPoller.site_configs import get_site_config
 
 
 class NewsSpider(scrapy.Spider):
+    """
+    Description: Generic, config-driven sitemap-crawling spider -- works
+        for any site registered in site_configs.py without code changes.
+    """
     name = "news"
 
+    """
+    Description: Loads `site`'s config and sets up this spider instance's
+        allowed_domains/start_urls/link-selectors/article-URL pattern
+        from it.
+    Param[in] site:  News site key, e.g. "cnn"
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def __init__(self, site: str = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not site:
@@ -43,6 +55,15 @@ class NewsSpider(scrapy.Spider):
         self.index_link_selectors = config["index_link_selectors"]
         self.article_url_contains = config["article_url_contains"]
 
+    """
+    Description: Scrapy's callback for every downloaded page (start_urls
+        and every followed link). Yields a NewsArticleItem if the page
+        looks like an article, and always follows every configured
+        index-link selector to keep crawling the sitemap/index hierarchy.
+    Param[in] response:  The downloaded Response for a page
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def parse(self, response):
         if self.article_url_contains in response.url:
             item = self.extract_article(response)
