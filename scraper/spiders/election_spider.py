@@ -46,7 +46,7 @@ class ElectionSpider(scrapy.Spider):
         requires the browser path, and sets up this spider instance's
         allowed_domains/start_urls/table_parser from the config.
     Param[in] site:  Election site key, e.g. "example_open_state"
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def __init__(self, site: str = None, *args, **kwargs):
@@ -79,7 +79,7 @@ class ElectionSpider(scrapy.Spider):
         the candidate table via the configured strategy and yields one
         ElectionCandidateItem per record found.
     Param[in] response:  The downloaded Response for a start_url
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def parse(self, response):

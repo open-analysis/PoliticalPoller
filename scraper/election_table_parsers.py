@@ -31,7 +31,7 @@ from parsel import Selector
 Description: Returns the stripped, concatenated text of a td's full
     subtree (via XPath string()), or an empty string if the cell is None.
 Param[in] td:  A parsel Selector for a single <td>
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _cell_text(td) -> str:
@@ -45,7 +45,7 @@ Description: Returns the integer colspan attribute of a td, defaulting to
     1 if missing or unparseable.
 Param[in] td:       A parsel Selector for a single <td>
 Param[in] default:  Value to return if colspan is missing/unparseable
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _colspan(td, default: int = 1) -> int:
@@ -61,7 +61,7 @@ Description: Extracts a candidate's website value from a td, preferring
     text; ignores empty/placeholder hrefs (e.g. "javascript:...", bare
     "http://").
 Param[in] td:  A parsel Selector for a single <td>
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _extract_website(td) -> str:
@@ -228,7 +228,7 @@ Param[in] parser_config:  That parser's config dict (see
     each accepts)
 Param[out] records:       List of dicts (office_level, office,
     candidate_name, party, website, file_date)
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def parse_table(selector: Selector, parser_name: str, parser_config: dict) -> list:

@@ -23,7 +23,7 @@ AI/LLM usage must be disclosed on if used. Model information should be provided.
 Description: This function reads the input politician's file and returns a list of their information 
 Param[in] input_file:       Input file path as a string to be read
 Return List:                List of the politician's information
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: glad0s-potato
 """
 def read_politician_file(input_file:str) -> List:
@@ -38,7 +38,7 @@ AI/LLM usage must be disclosed on if used. Model information maybe provided \
 ```python
 """
 Description: This class creates and stores information for a politician. 
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: None
 """
 class politician():

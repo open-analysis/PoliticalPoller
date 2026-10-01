@@ -25,7 +25,7 @@ class PoliticalpollerSpiderMiddleware(object):
         wiring its spider_opened() method up to the spider_opened signal.
     Param[in] crawler:  The Crawler this middleware is being created for
     Param[out] s:        A new instance of this middleware
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     @classmethod
     def from_crawler(cls, crawler):
@@ -39,7 +39,7 @@ class PoliticalpollerSpiderMiddleware(object):
         exception.
     Param[in] response:  The Response about to reach the spider
     Param[in] spider:    The Spider the response is headed to
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_spider_input(self, response, spider):
         return None
@@ -52,7 +52,7 @@ class PoliticalpollerSpiderMiddleware(object):
     Param[in] result:    Iterable of Request/dict/Item objects the spider
         callback returned/yielded
     Param[in] spider:    The Spider that produced the results
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_spider_output(self, response, result, spider):
         for i in result:
@@ -67,7 +67,7 @@ class PoliticalpollerSpiderMiddleware(object):
         exception was raised
     Param[in] exception:  The exception raised
     Param[in] spider:     The Spider that was processing the response
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_spider_exception(self, response, exception, spider):
         pass
@@ -78,7 +78,7 @@ class PoliticalpollerSpiderMiddleware(object):
         Must return only Request objects (not items).
     Param[in] start_requests:  Iterable of the spider's initial Requests
     Param[in] spider:          The Spider the requests belong to
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_start_requests(self, start_requests, spider):
         for r in start_requests:
@@ -88,7 +88,7 @@ class PoliticalpollerSpiderMiddleware(object):
     Description: Signal handler connected to spider_opened (via
         from_crawler()); logs that the spider has started.
     Param[in] spider:  The Spider that just opened
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def spider_opened(self, spider):
         spider.logger.info('Spider opened: %s' % spider.name)
@@ -104,7 +104,7 @@ class PoliticalpollerDownloaderMiddleware(object):
         wiring its spider_opened() method up to the spider_opened signal.
     Param[in] crawler:  The Crawler this middleware is being created for
     Param[out] s:        A new instance of this middleware
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     @classmethod
     def from_crawler(cls, crawler):
@@ -119,7 +119,7 @@ class PoliticalpollerDownloaderMiddleware(object):
         or raise IgnoreRequest.
     Param[in] request:  The Request about to be downloaded
     Param[in] spider:   The Spider that issued the request
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_request(self, request, spider):
         return None
@@ -131,7 +131,7 @@ class PoliticalpollerDownloaderMiddleware(object):
     Param[in] request:   The original Request
     Param[in] response:  The Response the downloader produced
     Param[in] spider:    The Spider the response is headed to
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_response(self, request, response, spider):
         return response
@@ -145,7 +145,7 @@ class PoliticalpollerDownloaderMiddleware(object):
         was raised
     Param[in] exception:  The exception raised
     Param[in] spider:     The Spider that issued the request
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def process_exception(self, request, exception, spider):
         pass
@@ -154,7 +154,7 @@ class PoliticalpollerDownloaderMiddleware(object):
     Description: Signal handler connected to spider_opened (via
         from_crawler()); logs that the spider has started.
     Param[in] spider:  The Spider that just opened
-    Owner: @opnanalysis
+    Owner: @open-analysis
     """
     def spider_opened(self, spider):
         spider.logger.info('Spider opened: %s' % spider.name)

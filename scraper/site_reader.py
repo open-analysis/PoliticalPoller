@@ -60,7 +60,7 @@ Param[in] headless:       Used by "persistent_browser"/"playwright"; try
     headless=False once if blocked, to solve manually
 Param[in] cookie_file:    Only used by "cached_session"
 Param[in] user_data_dir:  Only used by "persistent_browser"
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def read_page(input_webpage: str,
@@ -99,7 +99,7 @@ Description: Finds political associations for a given politician
     - Bills/Orders/Research/etc with their name attached to i
 Param[in] name:     Politician name to search for
 Param[in] assoc:    Association to search for
-Owner: @opnanalysis
+Owner: @open-analysis
 """
 def find_political_assoc(name: str, assoc: str):
     pass
@@ -112,7 +112,7 @@ Description: Prints each matched candidate's full office history in the
     for different offices across cycles -- see candidate_store.py).
 Param[in] matches:  List of candidate record dicts (the "offices"-shaped
     kind from candidate_store.py), as returned by search_by_name()
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _print_candidate_matches(matches: list) -> None:
@@ -153,7 +153,7 @@ Param[in] force_refresh:  Skip the cache and go straight to a live scrape
 Param[out] matches:       List of candidate record dicts (candidate_name,
     state, first_seen, last_seen, offices: {office: {office_level,
     party, website, file_date, source_url, first_seen, last_seen}})
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def find_politician(

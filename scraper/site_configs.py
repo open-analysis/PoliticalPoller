@@ -55,7 +55,7 @@ SITE_CONFIGS = {
 Description: Returns a given site's configuration info for a spider to crawl.
 Param[in] Site:      Website name/domain name
 Param[out] dict:    Dictionary of a site's configuration 
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def get_site_config(site: str) -> dict:

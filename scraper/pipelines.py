@@ -16,13 +16,13 @@ ad hoc inside parse()) is the standard Scrapy way to validate/clean
 items, and it runs for every item regardless of which callback yielded
 it.
 
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 class NewsArticleValidationPipeline(object):
     """
     Description: Initializes the within-run URL-dedup set.
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def __init__(self):
@@ -35,7 +35,7 @@ class NewsArticleValidationPipeline(object):
     Param[in] item:    The NewsArticleItem being processed
     Param[in] spider:  The spider that yielded it
     Param[out] item:   The same item, unchanged, if it passes validation
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def process_item(self, item, spider):
@@ -54,14 +54,14 @@ candidate) and de-dupes on (site, office, candidate_name) within a
 run, since a candidate can legitimately appear once per office but a
 parser bug could otherwise emit the same row twice.
 
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 class ElectionCandidateValidationPipeline(object):
     """
     Description: Initializes the within-run (site, office, candidate_name)
         dedup set.
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def __init__(self):
@@ -75,7 +75,7 @@ class ElectionCandidateValidationPipeline(object):
     Param[in] item:    The ElectionCandidateItem being processed
     Param[in] spider:  The spider that yielded it
     Param[out] item:   The same item, unchanged, if it passes validation
-    Owner: @opnanalysis
+    Owner: @open-analysis
     LLM: claude-sonnet-5
     """
     def process_item(self, item, spider):

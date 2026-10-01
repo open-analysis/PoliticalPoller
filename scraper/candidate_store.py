@@ -52,7 +52,7 @@ Description: Builds the on-disk path for a site's candidate store file,
 Param[in] site:       Site key, e.g. "mn"
 Param[in] store_dir:  Directory the per-site JSON files live in
 Param[out] path:      Path to that site's candidates_<site>.json file
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _store_path(site: str, store_dir: str = DEFAULT_STORE_DIR) -> str:
@@ -73,7 +73,7 @@ Param[in] state:           State the candidacy is in
 Param[in] extra:           Optional additional disambiguating value
 Param[out] candidate_id:   16-character hex ID, stable across calls for
     the same inputs
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def candidate_hash(candidate_name: str, state: str, extra: str = None) -> str:
@@ -90,7 +90,7 @@ Description: Builds the normalized "name|state" key _detect_collisions()
     candidate_hash() for that.
 Param[in] candidate_name:  Candidate's name as scraped
 Param[in] state:           State the candidacy is in
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _name_state_key(candidate_name: str, state: str) -> str:
@@ -120,7 +120,7 @@ Param[in] fresh_records:  List of candidate dicts, as returned by
     run_election_spider()
 Param[out] collisions:    Dict of name_state_key -> sorted list of the
     distinct offices seen together for it in this batch
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def _detect_collisions(fresh_records: list) -> dict:
@@ -144,7 +144,7 @@ Param[out] store:     Dict keyed by candidate_id -> candidate record
     (candidate_id, candidate_name, site, state, first_seen, last_seen,
     offices: {office_name: {office_level, party, website, file_date,
     source_url, first_seen, last_seen}})
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def load_candidate_store(site: str, store_dir: str = DEFAULT_STORE_DIR) -> dict:
@@ -161,7 +161,7 @@ Param[in] site:       Site key, e.g. "mn"
 Param[in] store:      Dict as returned by load_candidate_store() /
     upsert_candidates()
 Param[in] store_dir:  Directory the per-site JSON files live in
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def save_candidate_store(site: str, store: dict, store_dir: str = DEFAULT_STORE_DIR) -> None:
@@ -178,7 +178,7 @@ Param[in] store:  A candidate store dict, as returned by
     load_candidate_store()
 Param[in] name:   Name (or partial name) to search for
 Param[out] matches: List of candidate record dicts
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def search_by_name(store: dict, name: str) -> list:
@@ -222,7 +222,7 @@ Param[out] summary:       Dict with "new_candidates" (names seen for the
     detected running under multiple offices in this one scrape -- see
     _detect_collisions()), and "store" (the full merged store that was
     just saved)
-Owner: @opnanalysis
+Owner: @open-analysis
 LLM: claude-sonnet-5
 """
 def upsert_candidates(
