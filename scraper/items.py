@@ -31,8 +31,7 @@ being hard-coded to one site's fields.
 Owner: @opnanalysis
 LLM: claude-sonnet-5
 """
-class Election
-CandidateItem(scrapy.Item):
+class ElectionCandidateItem(scrapy.Item):
     site = scrapy.Field()             # config key, e.g. "mn"
     state = scrapy.Field()
     office_level = scrapy.Field()     # e.g. "Federal Offices", "State Offices"

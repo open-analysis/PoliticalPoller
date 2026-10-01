@@ -17,16 +17,19 @@ Run directly with:
 LLM: claude-sonnet-5
 """
 
-from datetime import datetime, timezone
-
 import scrapy
 
 from PoliticalPoller.items import ElectionCandidateItem
 from PoliticalPoller.election_site_configs import get_election_site_config
-from PoliticalPoller.election_table_parsers import parse_table
+from PoliticalPoller.election_table_parsers import build_candidate_records, parse_table
 
 
 class ElectionSpider(scrapy.Spider):
+    """
+    Description: Scrapy spider for government candidate/ballot pages that
+        don't sit behind bot protection -- see the module docstring for
+        why bot-protected sites are refused rather than attempted here.
+    """
     name = "elections"
 
     # Government sites are often lower-capacity and more sensitive to
@@ -38,6 +41,14 @@ class ElectionSpider(scrapy.Spider):
         "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
     }
 
+    """
+    Description: Loads `site`'s config, refuses to proceed if that site
+        requires the browser path, and sets up this spider instance's
+        allowed_domains/start_urls/table_parser from the config.
+    Param[in] site:  Election site key, e.g. "example_open_state"
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def __init__(self, site: str = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not site:
@@ -63,20 +74,20 @@ class ElectionSpider(scrapy.Spider):
         self.table_parser = config["table_parser"]
         self.table_parser_config = config.get("table_parser_config", {})
 
+    """
+    Description: Scrapy's callback for each start_url response; parses
+        the candidate table via the configured strategy and yields one
+        ElectionCandidateItem per record found.
+    Param[in] response:  The downloaded Response for a start_url
+    Owner: @opnanalysis
+    LLM: claude-sonnet-5
+    """
     def parse(self, response):
-        records = parse_table(response.selector, self.table_parser, self.table_parser_config)
+        raw_records = parse_table(response.selector, self.table_parser, self.table_parser_config)
 
-        scraped_at = datetime.now(timezone.utc).isoformat()
+        # Shared with run_election_spider()'s browser-fetch path in
+        # site_reader.py, so a Scrapy-crawled site and a browser-fetched
+        # site yield identically-shaped records.
+        records = build_candidate_records(raw_records, self.site, self.state, response.url)
         for record in records:
-            yield ElectionCandidateItem(
-                site=self.site,
-                state=self.state,
-                office_level=record.get("office_level"),
-                office=record.get("office"),
-                candidate_name=record.get("candidate_name"),
-                party=record.get("party"),
-                website=record.get("website"),
-                file_date=record.get("file_date"),
-                source_url=response.url,
-                scraped_at=scraped_at,
-            )
+            yield ElectionCandidateItem(**record)
