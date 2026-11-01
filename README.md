@@ -5,18 +5,18 @@ Centralized site grab upcoming politician information \
 ## Repository Layout
 | Path | Purpose |
 |---|---|
-| `run.sh` | Convenience script: activates the venv, installs dependencies, runs `scraper/site_reader.py` |
+| `run.sh` | Convenience script: activates the venv, installs dependencies, runs `PoliticalPoller/site_reader.py` |
 | `scripts/` | One run script per function (`find_politician.sh`, `sync_candidates.sh`, `run_election_spider.sh`, `run_news_spider.sh`, `read_page.sh`) plus shared venv setup in `common.sh` |
-| `scraper/scrapy.cfg` | Scrapy project config (`settings = PoliticalPoller.settings`) |
-| `scraper/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch), `find_political_assoc()` (stub) |
-| `scraper/spider_runner.py` | `run_news_spider()`, `run_election_spider()`, `sync_election_candidates()` |
-| `scraper/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`) |
-| `scraper/site_configs.py` | News site configs (selectors, start URLs) used by the news spider |
-| `scraper/election_site_configs.py` | Government election site configs (e.g. `mn`) |
-| `scraper/election_table_parsers.py` | Shared table parsers (`colspan_hierarchy`, `simple_table`) |
-| `scraper/utils.py` | Fetch strategies (requests, cached session, Playwright, persistent browser) and HTML parsing helpers |
-| `scraper/spiders/` | Scrapy spiders: `news_spider.py` (`news`), `election_spider.py` (`elections`) |
-| `scraper/{items,pipelines,middlewares,settings}.py` | Scrapy project plumbing |
+| `scrapy.cfg` | Scrapy project config (`settings = PoliticalPoller.settings`), at the repo root |
+| `PoliticalPoller/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch), `find_political_assoc()` (stub) |
+| `PoliticalPoller/spider_runner.py` | `run_news_spider()`, `run_election_spider()`, `sync_election_candidates()` |
+| `PoliticalPoller/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`) |
+| `PoliticalPoller/site_configs.py` | News site configs (selectors, start URLs) used by the news spider |
+| `PoliticalPoller/election_site_configs.py` | Government election site configs (e.g. `mn`) |
+| `PoliticalPoller/election_table_parsers.py` | Shared table parsers (`colspan_hierarchy`, `simple_table`) |
+| `PoliticalPoller/utils.py` | Fetch strategies (requests, cached session, Playwright, persistent browser) and HTML parsing helpers |
+| `PoliticalPoller/spiders/` | Scrapy spiders: `news_spider.py` (`news`), `election_spider.py` (`elections`) |
+| `PoliticalPoller/{items,pipelines,middlewares,settings}.py` | Scrapy project plumbing |
 | `file_manipulation/file_reader.py` | Planned file readers (stubs) |
 | `2026_state_candidate_list_sources.md` | Research on candidate-list sources for all 50 states |
 | `sitePolicy.md`, `filePolicy.md`, `aiPolicy.md` | Scraping, code-documentation, and AI-usage policies |
@@ -42,7 +42,7 @@ playwright install chromium
 ```bash
 ./run.sh
 ```
-This activates `venv`, installs the pip modules, installs Chromium for Playwright, then runs `python3 scraper/site_reader.py`. Running that file directly calls `find_politician("test")` against the Minnesota (`mn`) site, so edit the `__main__` block at the bottom of `scraper/site_reader.py` to search for a real name.
+This activates `venv`, installs the pip modules, installs Chromium for Playwright, then runs `python3 PoliticalPoller/site_reader.py`. Running that file directly calls `find_politician("test")` against the Minnesota (`mn`) site, so edit the `__main__` block at the bottom of `PoliticalPoller/site_reader.py` to search for a real name.
 
 ## Run Scripts
 Each script in `scripts/` wraps one Python function and uses the same venv setup as `run.sh` (shared in `scripts/common.sh`): it creates `./venv` if missing, activates it, installs the pip modules and Chromium on the first run only (delete `venv/.deps_installed` to force a reinstall), then deactivates on exit. Outputs (`candidate_data/`, `candidate_results_<date>.json`, `playwright_profile/`) are written to the repo root. Run any script with `-h` for its options.
@@ -57,13 +57,11 @@ Each script in `scripts/` wraps one Python function and uses the same venv setup
 
 Browser flags: `--headed` shows the Chromium window (needed the first time, to solve the Minnesota CAPTCHA); `--headless` hides it. `find_politician.sh` defaults to headed, the others default to headless, matching the Python defaults.
 
-**Scrapy workaround:** the spiders import `PoliticalPoller.*` but the code lives in `scraper/`. `common.sh` creates a temporary `PoliticalPoller -> scraper` symlink on `PYTHONPATH` for each run so `scrapy crawl` can import the project. Nothing is added to the repo.
-
 ## Using the Python Functions Directly
 The scripts are Python functions; call them from a Python shell or your own script. Run from the repo root with the venv active:
 ```python
 import sys
-sys.path.append("scraper")
+sys.path.append("PoliticalPoller")
 from site_reader import find_politician
 from spider_runner import sync_election_candidates, run_election_spider, run_news_spider
 ```
@@ -110,17 +108,15 @@ read_page("https://candidates.sos.mn.gov/", method="persistent_browser")
 `method` can be `persistent_browser` (default, recommended), `cached_session`, `playwright`, or `requests`. This is the legacy single-site entry point; prefer the functions above.
 
 ### Add a new site
-- **Election/candidate site:** add an entry to `ELECTION_SITE_CONFIGS` in `scraper/election_site_configs.py` (`state`, `allowed_domains`, `start_urls`, `requires_browser`, `table_parser`, `table_parser_config`). Use `simple_table` with CSS selectors for flat tables or `colspan_hierarchy` for MN-style tables. Start from the states recommended in `2026_state_candidate_list_sources.md`.
-- **News site:** add an entry to `SITE_CONFIGS` in `scraper/site_configs.py` (`allowed_domains`, `start_urls`, `index_link_selectors`, `article_url_contains`).
+- **Election/candidate site:** add an entry to `ELECTION_SITE_CONFIGS` in `PoliticalPoller/election_site_configs.py` (`state`, `allowed_domains`, `start_urls`, `requires_browser`, `table_parser`, `table_parser_config`). Use `simple_table` with CSS selectors for flat tables or `colspan_hierarchy` for MN-style tables. Start from the states recommended in `2026_state_candidate_list_sources.md`.
+- **News site:** add an entry to `SITE_CONFIGS` in `PoliticalPoller/site_configs.py` (`allowed_domains`, `start_urls`, `index_link_selectors`, `article_url_contains`).
 
 No spider code changes are needed for either.
 
 ### Scrapy settings
-`scraper/settings.py` sets `ROBOTSTXT_OBEY = True`, a 1-second download delay, and AutoThrottle. The `USER_AGENT` still contains placeholder contact info (`example.com`); replace it before real crawling.
+`PoliticalPoller/settings.py` sets `ROBOTSTXT_OBEY = True`, a 1-second download delay, and AutoThrottle. The `USER_AGENT` still contains placeholder contact info (`example.com`); replace it before real crawling.
 
 ## Known Issues
-- **Scrapy package name:** `scraper/scrapy.cfg` now exists, but it points at `PoliticalPoller.settings` and there is no `PoliticalPoller` package (the code is in `scraper/`), so `scrapy crawl` fails with `ModuleNotFoundError` when run directly. The `scripts/` run scripts work around this with a temporary symlink; running the Python functions directly or `run.sh` does not. `spider_runner.py` also defaults `project_dir` to `"PoliticalPoller"`, which doesn't exist.
-- **Stale pipeline in `settings.py`:** `ITEM_PIPELINES` still lists `PoliticalPoller.pipelines.PoliticalpollerPipeline`, which doesn't exist in `pipelines.py`. Any Scrapy crawl (news, or non-browser election sites) stops with a `NameError` until that line is removed. The browser path used by `mn` doesn't use Scrapy.
 - `file_manipulation/file_reader.py` uses `List` without importing it from `typing`, and both functions are stubs.
 - `find_political_assoc()` is a stub.
 - `utils.py` mentions a `capture_session.py` helper that is not in the repo.
@@ -171,8 +167,8 @@ Open issues for:
 6. Compress
 
 ### Setup and packaging
-1. Reconcile the `scraper/` vs `PoliticalPoller` package name (rename the folder or change `scrapy.cfg`, `settings.py` and the spider imports) so Scrapy runs without the symlink workaround
-2. Remove the nonexistent `PoliticalpollerPipeline` from `ITEM_PIPELINES` in `settings.py`
+1. ~~Reconcile the `scraper/` vs `PoliticalPoller` package name (rename the folder, move `scrapy.cfg` to the repo root)~~
+2. ~~Remove the nonexistent `PoliticalpollerPipeline` from `ITEM_PIPELINES` in `settings.py`~~
 3. Add a `requirements.txt` (or `pyproject.toml`) with pinned dependencies
 4. Make `run.sh` create the venv if missing and skip reinstalling when up to date
 5. Replace the placeholder `USER_AGENT` contact info in `settings.py`

@@ -88,7 +88,6 @@ RETRY_TIMES = 2
 ITEM_PIPELINES = {
     'PoliticalPoller.pipelines.NewsArticleValidationPipeline': 200,
     'PoliticalPoller.pipelines.ElectionCandidateValidationPipeline': 210,
-    'PoliticalPoller.pipelines.PoliticalpollerPipeline': 300,
 }
 
 # Where scraped items get written by default. Override per run with
