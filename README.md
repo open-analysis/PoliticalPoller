@@ -5,7 +5,7 @@ Centralized site grab upcoming politician information \
 ## Repository Layout
 | Path | Purpose |
 |---|---|
-| `run.sh` | Convenience script: activates the venv, installs dependencies, runs `PoliticalPoller/site_reader.py` |
+| `test.sh` | Convenience script: activates the venv, installs dependencies, runs `PoliticalPoller/site_reader.py` |
 | `scripts/` | One run script per function (`find_politician.sh`, `sync_candidates.sh`, `run_election_spider.sh`, `run_news_spider.sh`, `read_page.sh`) plus shared venv setup in `common.sh` |
 | `scrapy.cfg` | Scrapy project config (`settings = PoliticalPoller.settings`), at the repo root |
 | `PoliticalPoller/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch), `find_political_assoc()` (stub) |
@@ -28,7 +28,7 @@ Centralized site grab upcoming politician information \
 - A Chromium install via Playwright (installed in the steps below)
 
 ### Setup
-`run.sh` assumes a virtual environment named `venv` already exists in the repo root (the creation line is commented out), so create it first:
+`test.sh` assumes a virtual environment named `venv` already exists in the repo root (the creation line is commented out), so create it first:
 ```bash
 git clone https://github.com/open-analysis/PoliticalPoller.git
 cd PoliticalPoller
@@ -38,14 +38,14 @@ pip3 install requests beautifulsoup4 playwright playwright-stealth scrapy
 playwright install chromium
 ```
 
-### Running with `run.sh`
+### Running with `test.sh`
 ```bash
-./run.sh
+./test.sh
 ```
 This activates `venv`, installs the pip modules, installs Chromium for Playwright, then runs `python3 PoliticalPoller/site_reader.py`. Running that file directly calls `find_politician("test")` against the Minnesota (`mn`) site, so edit the `__main__` block at the bottom of `PoliticalPoller/site_reader.py` to search for a real name.
 
 ## Run Scripts
-Each script in `scripts/` wraps one Python function and uses the same venv setup as `run.sh` (shared in `scripts/common.sh`): it creates `./venv` if missing, activates it, installs the pip modules and Chromium on the first run only (delete `venv/.deps_installed` to force a reinstall), then deactivates on exit. Outputs (`candidate_data/`, `candidate_results_<date>.json`, `playwright_profile/`) are written to the repo root. Run any script with `-h` for its options.
+Each script in `scripts/` wraps one Python function and uses the same venv setup as `test.sh` (shared in `scripts/common.sh`): it creates `./venv` if missing, activates it, installs the pip modules and Chromium on the first run only (delete `venv/.deps_installed` to force a reinstall), then deactivates on exit. Outputs (`candidate_data/`, `candidate_results_<date>.json`, `playwright_profile/`) are written to the repo root. Run any script with `-h` for its options.
 
 | Script | Wraps | Example |
 |---|---|---|
@@ -121,7 +121,7 @@ No spider code changes are needed for either.
 - `find_political_assoc()` is a stub.
 - `utils.py` mentions a `capture_session.py` helper that is not in the repo.
 - `_looks_solved()` in `utils.py` is hard-coded to `candidates.sos.mn.gov`, so the manual-CAPTCHA flow only works for Minnesota.
-- `run.sh` does not create the venv, and reinstalls dependencies on every run.
+- `test.sh` does not create the venv, and reinstalls dependencies on every run.
 - `__main__` in `site_reader.py` searches for the placeholder name `"test"`.
 - Candidate identity is keyed on name + state only; same-named people who never appear in the same scrape can be merged (see `candidate_store.py`).
 
@@ -170,7 +170,7 @@ Open issues for:
 1. ~~Reconcile the `scraper/` vs `PoliticalPoller` package name (rename the folder, move `scrapy.cfg` to the repo root)~~
 2. ~~Remove the nonexistent `PoliticalpollerPipeline` from `ITEM_PIPELINES` in `settings.py`~~
 3. Add a `requirements.txt` (or `pyproject.toml`) with pinned dependencies
-4. Make `run.sh` create the venv if missing and skip reinstalling when up to date
+4. Make `test.sh` create the venv if missing and skip reinstalling when up to date
 5. Replace the placeholder `USER_AGENT` contact info in `settings.py`
 6. Add `candidate_data/` and `candidate_results_*.json` to `.gitignore`
 7. Replace the bash heredocs in `scripts/` with a proper Python CLI (`argparse`) if the scripts grow
