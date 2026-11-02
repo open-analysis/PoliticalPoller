@@ -117,11 +117,7 @@ No spider code changes are needed for either.
 `PoliticalPoller/settings.py` sets `ROBOTSTXT_OBEY = True`, a 1-second download delay, and AutoThrottle. The `USER_AGENT` still contains placeholder contact info (`example.com`); replace it before real crawling.
 
 ## Known Issues
-- `file_manipulation/file_reader.py` uses `List` without importing it from `typing`, and both functions are stubs.
-- `find_political_assoc()` is a stub.
-- `utils.py` mentions a `capture_session.py` helper that is not in the repo.
 - `_looks_solved()` in `utils.py` is hard-coded to `candidates.sos.mn.gov`, so the manual-CAPTCHA flow only works for Minnesota.
-- `test.sh` does not create the venv, and reinstalls dependencies on every run.
 - `__main__` in `site_reader.py` searches for the placeholder name `"test"`.
 - Candidate identity is keyed on name + state only; same-named people who never appear in the same scrape can be merged (see `candidate_store.py`).
 
@@ -178,10 +174,9 @@ Open issues for:
 ### Code gaps
 1. Implement `read_sites_file()` and `read_politician_file()` in `file_manipulation/file_reader.py` (and add the `typing.List` import)
 2. Implement `find_political_assoc()` (office, state, district, party, group affiliations, bills/orders)
-3. Add or remove the missing `capture_session.py` referenced in `utils.py`
-4. Generalize `_looks_solved()` / block detection beyond Minnesota
-5. Add a stronger candidate identifier to `candidate_hash()` when a site exposes one (filer ID, district, birth year)
-6. Add tests (the `test/` folder is git-ignored and nothing is checked in)
+3. Generalize `_looks_solved()` / block detection beyond Minnesota
+4. Add a stronger candidate identifier to `candidate_hash()` when a site exposes one (filer ID, district, birth year)
+5. Add tests (the `test/` folder is git-ignored and nothing is checked in)
 
 ### More sources
 1. Add election site configs for the 32 states with live HTML candidate lists (start with WA, OK, KY, FL, MO, IL, AK; see `2026_state_candidate_list_sources.md`)

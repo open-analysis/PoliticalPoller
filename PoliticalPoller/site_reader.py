@@ -90,21 +90,6 @@ def read_page(input_webpage: str,
     return group_by_office(records)
 
 """
-Description: Finds political associations for a given politician
-    - Office held/going for
-    - State serving in
-    - District/ward/county/etc serving 
-    - Party affiliation 
-    - Group affiliations?
-    - Bills/Orders/Research/etc with their name attached to i
-Param[in] name:     Politician name to search for
-Param[in] assoc:    Association to search for
-Owner: @open-analysis
-"""
-def find_political_assoc(name: str, assoc: str):
-    pass
-
-"""
 Description: Prints each matched candidate's full office history in the
     office_level/office/candidate_name/party/website/file_date shape
     find_politician() has always returned, one JSON block per office they
