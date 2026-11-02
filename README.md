@@ -10,9 +10,10 @@ Centralized site grab upcoming politician information \
 | `scrapy.cfg` | Scrapy project config (`settings = PoliticalPoller.settings`), at the repo root |
 | `PoliticalPoller/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch) |
 | `PoliticalPoller/spider_runner.py` | `run_news_spider()`, `run_election_spider()`, `sync_election_candidates()` |
-| `PoliticalPoller/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`) |
+| `PoliticalPoller/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`); candidate identity, cycles, and review flags |
 | `PoliticalPoller/site_configs.py` | News site configs (selectors, start URLs) used by the news spider |
 | `PoliticalPoller/election_site_configs.py` | Government election site configs (e.g. `mn`) |
+| `tests/test_candidate_store.py` | Scenario tests for candidate identity, splits, cycles, and review flags |
 | `PoliticalPoller/election_table_parsers.py` | Shared table parsers (`colspan_hierarchy`, `simple_table`) |
 | `PoliticalPoller/utils.py` | Fetch strategies (requests, Playwright, persistent browser) and HTML parsing helpers |
 | `PoliticalPoller/spiders/` | Scrapy spiders: `news_spider.py` (`news`), `election_spider.py` (`elections`) |
@@ -116,10 +117,33 @@ No spider code changes are needed for either.
 ### Scrapy settings
 `PoliticalPoller/settings.py` sets `ROBOTSTXT_OBEY = True`, a 1-second download delay, and AutoThrottle. The `USER_AGENT` still contains placeholder contact info (`example.com`); replace it before real crawling.
 
+## Candidate Identity and Review Flags
+`candidate_store.py` decides whether a scraped row is a person it already has. In order:
+
+1. **Site-issued ID (strongest).** If a site shows a filer/candidate ID, set `filer_id_selector` (`simple_table`) or `filer_id_index` (`colspan_hierarchy`) in that site's `table_parser_config`. Rows then carry `filer_id`, and the store uses it as the identity (via `candidate_hash(..., extra="filer:<id>")`): the same ID always lands on the same candidate, even if the name is respelled, and same-named people with different IDs are never merged. A name-only record that already exists gets the ID attached, keeping its history, unless the party and website both disagree.
+2. **Name + state, with a check before merging.** When a name-only match would get a *new office or new cycle*, the store compares the new row to the candidate's latest filing: party (case-insensitive) and website domain (ignoring `www.`), only when both sides have a value.
+   - Party **and** website differ: kept as a separate record (scoped to the office), the name goes on the collisions list (`_collisions`), and a `split_conflict` flag is raised.
+   - Only one differs: merged, with a `party_changed` or `website_changed` flag, since a party switch or a new campaign site between cycles is common.
+   - Pass `split_policy="either"` to `upsert_candidates()` to split when either one differs.
+   - The same office in the same cycle is just a refresh of the same filing and is never split.
+3. **Same-scrape collisions.** Two different offices under one name in one scrape are treated as two people, as before.
+
+**Cycles.** Each office entry stores `cycle`, the year in `file_date` (`2026-05-26`, `5/26/2026`, and `5/26/26` all work; no readable year means no cycle checks for that row). The candidate has a sorted `cycles` list. If the same office is filed again in a later cycle, the earlier values are kept in that entry's `history` list. A name-only match more than `CYCLE_GAP_WARN_YEARS` (6) from every cycle on file raises a `cycle_gap` flag. Note the cycle is the *filing* year, so a site that opens filing the year before the election reports the earlier year.
+
+**Reviewing flags.** Flags are stored in the candidate file under `_review` and printed at the end of every sync:
+```
+  ? review [party_changed] Al Kim: party 'DFL' -> 'GOP' (now Senator, cycle 2024) (flag 72317257942f)
+```
+```python
+import candidate_store
+candidate_store.list_review_flags("mn")                       # open flags
+candidate_store.dismiss_review_flag("mn", "72317257942f", "checked, same person")
+```
+Flags never block a merge on their own, and a dismissed flag is not raised again. Run the scenario tests with `python3 tests/test_candidate_store.py`.
+
 ## Known Issues
 - `_looks_solved()` in `utils.py` is hard-coded to `candidates.sos.mn.gov`, so the manual-CAPTCHA flow only works for Minnesota.
-- `__main__` in `site_reader.py` searches for the placeholder name `"test"`.
-- Candidate identity is keyed on name + state only; same-named people who never appear in the same scrape can be merged (see `candidate_store.py`).
+- For sites that expose no filer/candidate ID (Minnesota's config doesn't use one yet), identity is still name + state, backed by the party/website checks above. Two different people with the same name, party, and website domain would still be merged; the cycle-gap flag is the main safeguard.
 
 ## Support
 Open issues for:
@@ -175,7 +199,7 @@ Open issues for:
 1. Implement `read_sites_file()` and `read_politician_file()` in `file_manipulation/file_reader.py` (and add the `typing.List` import)
 2. Add `find_political_assoc()` back once it is implemented (office, state, district, party, group affiliations, bills/orders)
 3. Generalize `_looks_solved()` / block detection beyond Minnesota
-4. Add a stronger candidate identifier to `candidate_hash()` when a site exposes one (filer ID, district, birth year)
+4. ~~Add a stronger candidate identifier to `candidate_hash()` when a site exposes one~~ (done: `filer_id`; see Candidate Identity). Still to do: check each state's candidate page for a filer/candidate ID (Minnesota's included) and set `filer_id_selector` / `filer_id_index` where one exists
 5. Add tests (the `test/` folder is git-ignored and nothing is checked in)
 
 ### More sources

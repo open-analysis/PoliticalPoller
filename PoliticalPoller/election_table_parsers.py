@@ -100,6 +100,9 @@ def parse_colspan_hierarchy_table(selector: Selector, config: dict) -> list:
         party_index   (default 2)
         website_index (default 3)
         file_date_index (default 4)
+        filer_id_index (default None) -- td index holding a site-issued
+                                         candidate/filer ID, if the site
+                                         shows one (see candidate_store.py)
     """
     cfg = {
         "level_min_colspan": 6,
@@ -114,6 +117,7 @@ def parse_colspan_hierarchy_table(selector: Selector, config: dict) -> list:
         "party_index": 2,
         "website_index": 3,
         "file_date_index": 4,
+        "filer_id_index": None,
         **config,
     }
 
@@ -158,6 +162,11 @@ def parse_colspan_hierarchy_table(selector: Selector, config: dict) -> list:
                 "party": _cell_text(tds[cfg["party_index"]]),
                 "website": _extract_website(tds[cfg["website_index"]]),
                 "file_date": _cell_text(tds[cfg["file_date_index"]]),
+                "filer_id": (
+                    _cell_text(tds[cfg["filer_id_index"]])
+                    if cfg["filer_id_index"] is not None and cfg["filer_id_index"] < len(tds)
+                    else ""
+                ),
             })
             continue
 
@@ -178,7 +187,10 @@ def parse_simple_table(selector: Selector, config: dict) -> list:
                                 candidate name text/attr
     Optional config keys (skipped if absent/no match):
         office_level_selector, office_selector, party_selector,
-        website_selector, file_date_selector
+        website_selector, file_date_selector, filer_id_selector (a
+        site-issued candidate/filer ID -- when a site has one, set this:
+        it is the only reliable way to tell same-named people apart, see
+        candidate_store.py)
     """
     if "row_selector" not in config or "name_selector" not in config:
         raise ValueError(
@@ -206,6 +218,7 @@ def parse_simple_table(selector: Selector, config: dict) -> list:
             "party": field("party_selector"),
             "website": field("website_selector"),
             "file_date": field("file_date_selector"),
+            "filer_id": field("filer_id_selector"),
         })
 
     return records
@@ -227,7 +240,7 @@ Param[in] parser_config:  That parser's config dict (see
     parse_colspan_hierarchy_table()/parse_simple_table() for the keys
     each accepts)
 Param[out] records:       List of dicts (office_level, office,
-    candidate_name, party, website, file_date)
+    candidate_name, party, website, file_date, filer_id)
 Owner: @open-analysis
 LLM: claude-sonnet-5
 """
@@ -263,6 +276,7 @@ def build_candidate_records(records: list, site: str, state: str, source_url: st
             "party": r.get("party"),
             "website": r.get("website"),
             "file_date": r.get("file_date"),
+            "filer_id": r.get("filer_id") or None,
             "source_url": source_url,
             "scraped_at": scraped_at,
         }

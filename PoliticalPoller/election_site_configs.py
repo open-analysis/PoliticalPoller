@@ -54,6 +54,9 @@ ELECTION_SITE_CONFIGS = {
             "party_selector": "td.party::text",
             "website_selector": "td.website a::attr(href)",
             "file_date_selector": "td.filed-date::text",
+            # If the site shows a candidate/filer ID, add it -- it is the
+            # only reliable way to tell same-named people apart:
+            # "filer_id_selector": "td.filer-id::text",
         },
     },
 }

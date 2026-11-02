@@ -9,25 +9,31 @@ Description: Persists scraped candidate records to a per-site JSON file,
     full filing history -- every office they've ever run for on this
     site -- stays attached to one identity.
 
-    Identity caveat, stated plainly: the source site gives us nothing
-    stronger than a name to key on (no filer ID, no DOB, nothing). This
-    module hashes normalized candidate_name + state to build an ID
-    (candidate_hash()), which is enough to keep one real person's offices
-    merged over time. It also runs a same-scrape collision check
-    (_detect_collisions()): if two different offices show up under the
-    same name+state in one scrape, that's treated as two different people
-    (most filing sites don't let one person run for two offices in the
-    same cycle), and that name+state is permanently flagged in the store
-    so it's disambiguated by office on every later run too -- rather than
-    silently merging a second same-named person into the first one's
-    history. This catches the common case (two people with the same name
-    both currently on the ballot) but not every case: two different
-    people who happen to share a name and only ever appear one-at-a-time,
-    cycle apart, are indistinguishable from one person switching offices,
-    and would still merge. The honest fix for that remaining gap is to
-    fold in a stronger field the moment the site ever exposes one (a
-    filer/candidate ID, a district, a birth year) via candidate_hash()'s
-    `extra` parameter.
+    Identity, in order of strength:
+      1. A real site-provided ID. If a record carries "filer_id" (see the
+         optional filer_id_selector / filer_id_index parser settings), that
+         ID IS the identity: it is folded into candidate_hash() via
+         `extra`, a later record with the same ID always lands on the same
+         candidate (even if the name's spelling changes), and two people
+         who share a name but have different IDs are never merged.
+      2. Otherwise, normalized candidate_name + state (candidate_hash()).
+         Nothing stronger is available, so before attaching a new office or
+         a new election cycle to an existing name-matched candidate,
+         _corroborate() compares party and the website's domain. If both
+         differ the record is split off as its own candidate (and the name
+         is added to the collisions list); if only one differs the records
+         are merged but a review flag is raised, since a party or campaign
+         site change between cycles is common and legitimate. A long gap
+         between cycles on a name-only match is flagged too.
+      3. Same-scrape collision check (_detect_collisions()): two different
+         offices under one name+state in one scrape are treated as two
+         different people, and that name+state is permanently flagged so
+         it is disambiguated by office on every later run.
+    Every office entry also records its election "cycle" (the year of
+    file_date, when one can be read), and flags are stored in the store
+    under "_review" so a human can look them over (see
+    list_review_flags() / dismiss_review_flag()). Flags never block a
+    merge by themselves and nothing is ever deleted automatically.
 
     This is intentionally a plain JSON file, not a database: candidate
     filing data for one state is small (tens to low hundreds of rows),
@@ -40,10 +46,22 @@ LLM: claude-sonnet-5
 import hashlib
 import json
 import os
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 DEFAULT_STORE_DIR = "candidate_data"
+
+# A name-only match whose new election cycle is more than this many years
+# away from every cycle already on file is flagged for review.
+CYCLE_GAP_WARN_YEARS = 6
+
+# When a name-only match disagrees with the stored candidate on party and/or
+# website domain: "both" splits only if BOTH disagree (a party switch or a
+# new campaign site alone is common, so those only raise a flag); "either"
+# splits if EITHER disagrees (stricter, more duplicates to merge by hand).
+DEFAULT_SPLIT_POLICY = "both"
 
 
 """
@@ -189,47 +207,259 @@ def search_by_name(store: dict, name: str) -> list:
     ]
 
 
+# Reserved store key holding review flags (see _add_review_flag()).
+_REVIEW_KEY = "_review"
+
 # Office-level fields a fresh scrape can update for an already-known
 # office. Not candidate_name/state (the identity itself) or that office's
 # first_seen (set once, the first time we see them running for it).
-_UPDATABLE_OFFICE_FIELDS = ("office_level", "party", "website", "file_date", "source_url")
+_UPDATABLE_OFFICE_FIELDS = ("office_level", "party", "website", "file_date", "source_url", "cycle")
+
+
+"""
+Description: Trims a scraped value to a plain string ("" for None).
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _clean(value) -> str:
+    return "" if value is None else str(value).strip()
+
+
+"""
+Description: Normalizes a party label for comparison (case and whitespace
+    insensitive).
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _norm_party(party) -> str:
+    return " ".join(_clean(party).lower().split())
+
+
+"""
+Description: Reduces a website value to a bare lowercase domain without
+    "www." for comparison. Returns "" when the value does not look like a
+    web address (the scraper falls back to cell text, which can be "N/A"
+    or similar), so it is treated as "no value".
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _website_domain(website) -> str:
+    value = _clean(website).lower()
+    if not value:
+        return ""
+    if "://" not in value:
+        value = "http://" + value
+    host = urlparse(value).netloc.split("@")[-1].split(":")[0]
+    if "." not in host:
+        return ""
+    return host[4:] if host.startswith("www.") else host
+
+
+_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
+_SHORT_DATE_RE = re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-](\d{2})\b")
+
+
+"""
+Description: Works out the election cycle (a year) for a record from the
+    year in its file_date ("2026-05-26", "5/26/2026", or "5/26/26").
+    Returns None if no year can be read, in which case cycle-based checks
+    are skipped for that record rather than guessed. Note this is the year
+    the candidate FILED, so a site that opens filing the year before the
+    election (e.g. Nov 2025 for 2026) reports the earlier year.
+Param[in] record:  Any dict with an optional "file_date"
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _extract_cycle(record: dict):
+    file_date = _clean(record.get("file_date"))
+    match = _YEAR_RE.search(file_date)
+    if match:
+        return int(match.group(0))
+    match = _SHORT_DATE_RE.search(file_date)
+    if match:
+        return 2000 + int(match.group(1))
+    return None
+
+
+"""
+Description: Returns the (office_name, entry) a candidate was most recently
+    filed under: highest cycle first, then most recently seen.
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _latest_office_entry(candidate: dict):
+    offices = candidate.get("offices") or {}
+    if not offices:
+        return None, None
+    name = max(
+        offices,
+        key=lambda o: (offices[o].get("cycle") or 0, offices[o].get("last_seen") or ""),
+    )
+    return name, offices[name]
+
+
+"""
+Description: Decides whether a fresh record that name-matches an existing
+    candidate (no site ID to say for sure) should be merged into them, and
+    which review flags to raise either way. Only runs when the record would
+    attach a NEW office or a NEW cycle to the candidate; a same-office,
+    same-cycle row is just the same filing being refreshed.
+    Compares the fresh record to the candidate's most recent filing:
+      - party differs (both non-empty, case-insensitive)
+      - website domain differs (both non-empty, ignoring "www.")
+    and splits per `split_policy` ("both" or "either"); anything short of a
+    split that still differs becomes a "party_changed"/"website_changed"
+    flag. Also raises "cycle_gap" if the new cycle is more than
+    CYCLE_GAP_WARN_YEARS from every cycle already on file.
+Param[in] candidate:     Existing candidate record
+Param[in] record:        Fresh record
+Param[in] office:        Fresh record's office
+Param[in] cycle:         Fresh record's cycle, or None
+Param[in] split_policy:  "both" or "either"
+Param[out] result:       (should_split, [(kind, detail), ...])
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _corroborate(candidate: dict, record: dict, office: str, cycle, split_policy: str):
+    offices = candidate.get("offices") or {}
+    existing_entry = offices.get(office)
+    existing_cycle = (existing_entry or {}).get("cycle")
+    if existing_entry is not None and (cycle is None or existing_cycle is None or cycle == existing_cycle):
+        return False, []  # same filing being refreshed, not a new one
+
+    flags = []
+    _, latest = _latest_office_entry(candidate)
+    name = candidate.get("candidate_name")
+    party_conflict = site_conflict = False
+    if latest:
+        old_party, new_party = _norm_party(latest.get("party")), _norm_party(record.get("party"))
+        old_site, new_site = _website_domain(latest.get("website")), _website_domain(record.get("website"))
+        party_conflict = bool(old_party and new_party and old_party != new_party)
+        site_conflict = bool(old_site and new_site and old_site != new_site)
+        if party_conflict:
+            flags.append(("party_changed", f"{name}: party {latest.get('party')!r} -> {record.get('party')!r} "
+                                           f"(now {office}, cycle {cycle})"))
+        if site_conflict:
+            flags.append(("website_changed", f"{name}: website {old_site!r} -> {new_site!r} "
+                                             f"(now {office}, cycle {cycle})"))
+
+    should_split = (party_conflict and site_conflict) if split_policy == "both" else (party_conflict or site_conflict)
+
+    known_cycles = candidate.get("cycles") or sorted(
+        {c for c in ((e.get("cycle") or _extract_cycle(e)) for e in offices.values()) if c}
+    )
+    if cycle is not None and known_cycles and cycle not in known_cycles:
+        gap = min(abs(cycle - c) for c in known_cycles)
+        if gap > CYCLE_GAP_WARN_YEARS:
+            flags.append(("cycle_gap", f"{name}: {gap}-year gap since cycle(s) {known_cycles}; "
+                                       f"now {office}, cycle {cycle} -- same person?"))
+    return should_split, flags
+
+
+"""
+Description: Records a human-review flag in the store under "_review",
+    unless an identical one (same candidate, kind, and detail) is already
+    there -- including a dismissed one, so a flag a person has dismissed
+    does not come back on the next sync.
+Param[out] added:  True if a new flag was recorded
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def _add_review_flag(store: dict, new_flags: list, cid: str, kind: str, detail: str, now: str) -> bool:
+    flags = store.setdefault(_REVIEW_KEY, [])
+    flag_id = hashlib.sha256(f"{cid}|{kind}|{detail}".encode("utf-8")).hexdigest()[:12]
+    if any(f.get("flag_id") == flag_id for f in flags):
+        return False
+    flag = {"flag_id": flag_id, "candidate_id": cid, "kind": kind, "detail": detail,
+            "status": "open", "flagged_at": now}
+    flags.append(flag)
+    new_flags.append(flag)
+    return True
+
+
+"""
+Description: Returns the review flags saved for a site, newest last.
+Param[in] site:       Site key, e.g. "mn"
+Param[in] status:     "open" (default), "dismissed", or None for all
+Param[in] store_dir:  Directory the per-site JSON files live in
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def list_review_flags(site: str, status: str = "open", store_dir: str = DEFAULT_STORE_DIR) -> list:
+    flags = load_candidate_store(site, store_dir).get(_REVIEW_KEY, [])
+    return [f for f in flags if status is None or f.get("status") == status]
+
+
+"""
+Description: Marks a review flag as dismissed (a person looked at it and
+    decided it is fine, or fixed it by hand) so it stops being listed as
+    open. The flag is kept, not deleted, so it is not raised again.
+Param[in] site:       Site key, e.g. "mn"
+Param[in] flag_id:    flag_id from list_review_flags()
+Param[in] note:       Optional note on why
+Param[in] store_dir:  Directory the per-site JSON files live in
+Param[out] found:     True if a matching open flag was dismissed
+Owner: @open-analysis
+LLM: claude-sonnet-5.5
+"""
+def dismiss_review_flag(site: str, flag_id: str, note: str = None, store_dir: str = DEFAULT_STORE_DIR) -> bool:
+    store = load_candidate_store(site, store_dir)
+    for flag in store.get(_REVIEW_KEY, []):
+        if flag.get("flag_id") == flag_id and flag.get("status") == "open":
+            flag["status"] = "dismissed"
+            flag["dismissed_at"] = datetime.now(timezone.utc).isoformat()
+            if note:
+                flag["note"] = note
+            save_candidate_store(site, store, store_dir)
+            return True
+    return False
 
 
 """
 Description: Merges a fresh scrape (as returned by run_election_spider())
-    into a site's saved candidate store. Matches each record to a
-    candidate by candidate_hash(), NOT by office, so:
-      - a brand-new name -> a new candidate record is created
-      - a known candidate running for an office they haven't run for
-        before (this cycle or a later one) -> that office is added to
-        their existing record, other offices they've held stay intact
-      - a known candidate + a known office, with changed party/website/
-        file_date/etc -> that office's fields are refreshed in place
-      - a known candidate + a known office, nothing changed -> counted
-        unchanged, nothing written
-    Nothing is ever deleted just because this run didn't see it (see the
-    module docstring). Persists the merged store back to disk before
-    returning.
-Param[in] site:          Site key, e.g. "mn"
+    into a site's saved candidate store, resolving each record to a
+    candidate like this:
+      1. record has "filer_id": the candidate already holding that ID, or
+         (if none) a name-only record with no ID yet that passes
+         _corroborate() (the ID is attached to it, keeping its history),
+         or else a new candidate hashed with the ID as candidate_hash()'s
+         `extra`. Same-name people with different IDs are never merged.
+      2. no ID, and the name+state is in the collisions list: the
+         candidate that already holds this office, else one scoped to this
+         office via `extra`.
+      3. no ID: the candidate hashed from name+state, after _corroborate()
+         clears attaching a new office/cycle to them. If it says split, the
+         record becomes its own office-scoped candidate and the name+state
+         is added to the collisions list.
+    Then, per office: a new office is added, an unchanged one is counted,
+    a changed one is refreshed in place, and the same office filed in a
+    later cycle first has its previous values pushed onto that entry's
+    "history" list. Each office entry carries its "cycle"; the candidate
+    carries a sorted "cycles" list. Nothing is deleted because one run
+    did not see it. Persists the merged store before returning.
+Param[in] site:           Site key, e.g. "mn"
 Param[in] fresh_records:  List of candidate dicts, as returned by
-    run_election_spider()
+    run_election_spider() (optionally with "filer_id")
 Param[in] store_dir:      Directory the per-site JSON files live in
-Param[out] summary:       Dict with "new_candidates" (names seen for the
-    first time), "new_offices" (f"{name} -- {office}" for a known
-    candidate's new office), "updated_offices" (same label shape, for a
-    known candidate+office with changed fields), "unchanged" (a count),
-    "collisions" (human-readable notes for any name+state pair just
-    detected running under multiple offices in this one scrape -- see
-    _detect_collisions()), and "store" (the full merged store that was
-    just saved)
+Param[in] split_policy:   "both" (default) or "either" -- see
+    DEFAULT_SPLIT_POLICY
+Param[out] summary:       Dict with "new_candidates", "new_offices",
+    "updated_offices", "unchanged" (count), "collisions" (notes on name
+    collisions, including splits made this run), "review" (the review
+    flags newly raised this run), "open_review" (count of all open
+    flags), and "store" (the full merged store that was saved)
 Owner: @open-analysis
-LLM: claude-sonnet-5
+LLM: claude-sonnet-5.5
 """
 def upsert_candidates(
     site: str,
     fresh_records: list,
     store_dir: str = DEFAULT_STORE_DIR,
+    split_policy: str = DEFAULT_SPLIT_POLICY,
 ) -> dict:
+    if split_policy not in ("both", "either"):
+        raise ValueError("split_policy must be 'both' or 'either'")
+
     store = load_candidate_store(site, store_dir)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -241,8 +471,12 @@ def upsert_candidates(
             name = key.split("|", 1)[0]
             collision_labels.append(f"{name}: multiple people filed as {offices} in one scrape")
     known_collisions |= set(newly_detected.keys())
-    store[_COLLISIONS_KEY] = sorted(known_collisions)
 
+    filer_index = {
+        c["filer_id"]: cid for cid, c in store.items()
+        if isinstance(c, dict) and c.get("filer_id")
+    }
+    new_flags = []
     new_candidates, new_offices, updated_offices, unchanged = [], [], [], 0
 
     for record in fresh_records:
@@ -253,20 +487,48 @@ def upsert_candidates(
         state = record.get("state")
         office = record.get("office") or "Unknown Office"
         name_state_key = _name_state_key(name, state)
+        filer_id = _clean(record.get("filer_id")) or None
+        cycle = _extract_cycle(record)
+        plain_cid = candidate_hash(name, state)
+        pending_flags = []  # (kind, detail) -- recorded once cid is final
 
-        # A name+state pair ever caught in a same-scrape collision (this
-        # run or a past one) is treated as ambiguous going forward: scope
-        # its identity to the specific office rather than letting a
-        # same-named-different-person's row silently merge into someone
-        # else's history. This does mean a *genuine* later office change
-        # for someone caught in a collision won't be recognized as the
-        # same person -- there's no way to tell which of the two people
-        # moved without a stronger identifying field from the site (see
-        # the module docstring).
-        if name_state_key in known_collisions:
-            cid = candidate_hash(name, state, extra=office)
+        if filer_id:
+            cid = filer_index.get(filer_id)
+            if cid is None:
+                adoptable = store.get(plain_cid)
+                if (isinstance(adoptable, dict) and not adoptable.get("filer_id")
+                        and name_state_key not in known_collisions):
+                    split, found = _corroborate(adoptable, record, office, cycle, split_policy)
+                    pending_flags += found
+                    if split:
+                        pending_flags.append(("split_conflict",
+                            f"{name}: new filer_id {filer_id} not attached to the existing name-only "
+                            f"record (party and website both differ); kept separate"))
+                        cid = candidate_hash(name, state, extra=f"filer:{filer_id}")
+                    else:
+                        cid = plain_cid  # adopt: attach the ID to their history
+                else:
+                    cid = candidate_hash(name, state, extra=f"filer:{filer_id}")
+        elif name_state_key in known_collisions:
+            holder = store.get(plain_cid)
+            if isinstance(holder, dict) and office in holder.get("offices", {}):
+                cid = plain_cid
+            else:
+                cid = candidate_hash(name, state, extra=office)
         else:
-            cid = candidate_hash(name, state)
+            cid = plain_cid
+            existing = store.get(cid)
+            if isinstance(existing, dict):
+                split, found = _corroborate(existing, record, office, cycle, split_policy)
+                pending_flags += found
+                if split:
+                    known_collisions.add(name_state_key)
+                    cid = candidate_hash(name, state, extra=office)
+                    collision_labels.append(
+                        f"{name}: split into a separate record for {office} (cycle {cycle}) -- party and "
+                        f"website both differ from their earlier filing")
+                    pending_flags.append(("split_conflict",
+                        f"{name}: {office} (cycle {cycle}) kept separate from their earlier record"))
 
         candidate = store.get(cid)
         is_new_candidate = candidate is None
@@ -278,6 +540,7 @@ def upsert_candidates(
                 "state": state,
                 "first_seen": now,
                 "last_seen": now,
+                "cycles": [],
                 "offices": {},
             }
             store[cid] = candidate
@@ -285,7 +548,26 @@ def upsert_candidates(
         else:
             candidate["last_seen"] = now
 
+        if filer_id:
+            candidate["filer_id"] = filer_id
+            filer_index[filer_id] = cid
+
+        # Backfill cycle data on records saved before cycles existed.
+        for entry in candidate["offices"].values():
+            entry.setdefault("cycle", _extract_cycle(entry))
+        if not candidate.get("cycles"):
+            candidate["cycles"] = sorted({e["cycle"] for e in candidate["offices"].values() if e.get("cycle")})
+        if cycle is not None and cycle not in candidate["cycles"]:
+            candidate["cycles"] = sorted(candidate["cycles"] + [cycle])
+
+        for kind, detail in pending_flags:
+            # A site ID settles identity, so don't second-guess it on a long gap.
+            if kind == "cycle_gap" and candidate.get("filer_id"):
+                continue
+            _add_review_flag(store, new_flags, cid, kind, detail, now)
+
         fresh_office_fields = {field: record.get(field) for field in _UPDATABLE_OFFICE_FIELDS}
+        fresh_office_fields["cycle"] = cycle
         existing_office = candidate["offices"].get(office)
         label = f"{name} -- {office}"
 
@@ -295,12 +577,16 @@ def upsert_candidates(
             new_office_entry["last_seen"] = now
             candidate["offices"][office] = new_office_entry
             if not is_new_candidate:
-                # A known candidate showing up under an office we hadn't
-                # seen for them before -- exactly the "runs again for a
-                # different office later" case this store is meant to
-                # keep associated with the same person.
                 new_offices.append(label)
             continue
+
+        old_cycle = existing_office.get("cycle")
+        if cycle is not None and old_cycle is not None and cycle != old_cycle:
+            # Same office, later cycle: keep the earlier filing as history.
+            snapshot = {f: existing_office.get(f) for f in _UPDATABLE_OFFICE_FIELDS + ("first_seen", "last_seen")}
+            existing_office.setdefault("history", []).append(snapshot)
+            existing_office["first_seen"] = now
+            label += f" (cycle {old_cycle} -> {cycle})"
 
         changed_fields = [
             field for field in _UPDATABLE_OFFICE_FIELDS
@@ -314,6 +600,7 @@ def upsert_candidates(
         else:
             unchanged += 1
 
+    store[_COLLISIONS_KEY] = sorted(known_collisions)
     save_candidate_store(site, store, store_dir)
 
     return {
@@ -322,5 +609,7 @@ def upsert_candidates(
         "updated_offices": updated_offices,
         "unchanged": unchanged,
         "collisions": collision_labels,
+        "review": new_flags,
+        "open_review": sum(1 for f in store.get(_REVIEW_KEY, []) if f.get("status") == "open"),
         "store": store,
     }

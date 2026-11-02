@@ -185,4 +185,4 @@ if __name__ == "__main__":
     ap.add_argument("-r", "--refresh", action="store_true")
     ap.add_argument("--headless", action="store_true")
     a = ap.parse_args()
-    find_politician(a.name, site=a.site, headless=a.headless, force_refresh=a.refresh)find_politician("test")
+    find_politician(a.name, site=a.site, headless=a.headless, force_refresh=a.refresh)

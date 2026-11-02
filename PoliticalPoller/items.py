@@ -40,5 +40,6 @@ class ElectionCandidateItem(scrapy.Item):
     party = scrapy.Field()
     website = scrapy.Field()
     file_date = scrapy.Field()
+    filer_id = scrapy.Field()         # site-issued candidate/filer ID, if the site exposes one
     source_url = scrapy.Field()
     scraped_at = scrapy.Field()       # ISO timestamp, set in the spider

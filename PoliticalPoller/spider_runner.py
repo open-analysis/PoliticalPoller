@@ -238,8 +238,9 @@ Param[in] headless:     Only used for sites fetched via browser; pass
 Param[in] timeout:      Max seconds for the Scrapy path before killing it
 Param[out] summary:     Dict with "new_candidates" / "new_offices" /
     "updated_offices" (lists of labels), "unchanged" (a count),
-    "collisions" (notes on any newly-detected same-name candidates -- see
-    candidate_store.py), and "store" (the full merged store just saved)
+    "collisions" (notes on any newly-detected same-name candidates or splits
+    -- see candidate_store.py), "review" (review flags newly raised this
+    run), "open_review" (count of all open flags), and "store" (the full merged store just saved)
 Owner: @open-analysis
 LLM: claude-sonnet-5
 """
@@ -276,5 +277,11 @@ def sync_election_candidates(
         print(f"  ~ {label}")
     for note in summary.get("collisions", []):
         print(f"  ! possible same-name collision -- {note}")
+    for flag in summary.get("review", []):
+        print(f"  ? review [{flag['kind']}] {flag['detail']} (flag {flag['flag_id']})")
+    other_open = summary.get("open_review", 0) - len(summary.get("review", []))
+    if other_open > 0:
+        print(f"  {other_open} earlier review flag(s) still open -- see "
+              f"candidate_store.list_review_flags({site!r}) / dismiss_review_flag().")
 
     return summary
