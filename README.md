@@ -5,7 +5,6 @@ Centralized site grab upcoming politician information \
 ## Repository Layout
 | Path | Purpose |
 |---|---|
-| `test.sh` | Convenience script: activates the venv, installs dependencies, runs `PoliticalPoller/site_reader.py` |
 | `scripts/` | One run script per function (`find_politician.sh`, `sync_candidates.sh`, `run_election_spider.sh`, `run_news_spider.sh`, `read_page.sh`) plus shared venv setup in `common.sh` |
 | `scrapy.cfg` | Scrapy project config (`settings = PoliticalPoller.settings`), at the repo root |
 | `PoliticalPoller/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch) |
@@ -29,7 +28,7 @@ Centralized site grab upcoming politician information \
 - A Chromium install via Playwright (installed in the steps below)
 
 ### Setup
-`test.sh` assumes a virtual environment named `venv` already exists in the repo root (the creation line is commented out), so create it first:
+Assumes a virtual environment named `venv` already exists in the repo root, so create it first:
 ```bash
 git clone https://github.com/open-analysis/PoliticalPoller.git
 cd PoliticalPoller
@@ -39,14 +38,7 @@ pip3 install requests beautifulsoup4 playwright playwright-stealth scrapy
 playwright install chromium
 ```
 
-### Running with `test.sh`
-```bash
-./test.sh
-```
-This activates `venv`, installs the pip modules, installs Chromium for Playwright, then runs `python3 PoliticalPoller/site_reader.py`. Running that file directly calls `find_politician("test")` against the Minnesota (`mn`) site, so edit the `__main__` block at the bottom of `PoliticalPoller/site_reader.py` to search for a real name.
-
 ## Run Scripts
-Each script in `scripts/` wraps one Python function and uses the same venv setup as `test.sh` (shared in `scripts/common.sh`): it creates `./venv` if missing, activates it, installs the pip modules and Chromium on the first run only (delete `venv/.deps_installed` to force a reinstall), then deactivates on exit. Outputs (`candidate_data/`, `candidate_results_<date>.json`, `playwright_profile/`) are written to the repo root. Run any script with `-h` for its options.
 
 | Script | Wraps | Example |
 |---|---|---|
@@ -214,10 +206,9 @@ Open issues for:
 1. ~~Reconcile the `scraper/` vs `PoliticalPoller` package name (rename the folder, move `scrapy.cfg` to the repo root)~~
 2. ~~Remove the nonexistent `PoliticalpollerPipeline` from `ITEM_PIPELINES` in `settings.py`~~
 3. Add a `requirements.txt` (or `pyproject.toml`) with pinned dependencies
-4. Make `test.sh` create the venv if missing and skip reinstalling when up to date
-5. Replace the placeholder `USER_AGENT` contact info in `settings.py`
-6. Add `candidate_data/` and `candidate_results_*.json` to `.gitignore`
-7. Replace the bash heredocs in `scripts/` with a proper Python CLI (`argparse`) if the scripts grow
+4. Replace the placeholder `USER_AGENT` contact info in `settings.py`
+5. Add `candidate_data/` and `candidate_results_*.json` to `.gitignore`
+6. Replace the bash heredocs in `scripts/` with a proper Python CLI (`argparse`) if the scripts grow
 
 ### Code gaps
 1. Implement `read_sites_file()` and `read_politician_file()` in `file_manipulation/file_reader.py` (and add the `typing.List` import)
