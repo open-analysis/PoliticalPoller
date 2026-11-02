@@ -23,7 +23,6 @@ LLM: claude-sonnet-5
 """
 
 import logging
-import json
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -133,69 +132,6 @@ def fetch_soup(url: str, session: requests.Session = None) -> BeautifulSoup:
     return BeautifulSoup(res.content, "html.parser")
 
 
-DEFAULT_COOKIE_FILE = "session_cookies.json"
-
-"""
-Description: Fetches the page by replaying a previously-solved session
-    (cookies + user agent) from a saved JSON cookie file through plain
-    requests, avoiding a browser entirely for the actual scrape. Raises if
-    the site still blocks the request, which likely means the site
-    revalidates the client's TLS/JS fingerprint per-request rather than
-    trusting the cookie alone.
-Param[in] url:          Page URI to fetch
-Param[in] cookie_file:  Path to the saved session JSON 
-Owner: @open-analysis
-LLM: claude-sonnet-5
-"""
-def fetch_soup_cached_session(
-    url: str, cookie_file: str = DEFAULT_COOKIE_FILE
-) -> BeautifulSoup:
-    """
-    Note: this can still fail if the site's bot-detection ties its risk
-    decision to more than just the cookie value (e.g. re-checking the TLS
-    or JS fingerprint of the *client making each request*, not just the
-    session token) -- `requests` has a different TLS fingerprint than a
-    real browser. If this raises the "still blocked" error below, and if 
-    it keeps failing even right after a fresh capture, that's a sign the 
-    site is doing exactly this kind of per-request revalidation and cookie 
-    reuse alone won't be enough.
-    """
-    try:
-        with open(cookie_file, "r") as f:
-            saved = json.load(f)
-    except FileNotFoundError:
-        raise RuntimeError(
-            f"No saved session found at {cookie_file!r}. Run "
-            "manually solve the CAPTCHA once and save a reusable session."
-        )
-
-    session = requests.Session()
-    session.headers.update(HEADERS)
-    if saved.get("user_agent"):
-        session.headers["User-Agent"] = saved["user_agent"]
-
-    for cookie in saved["cookies"]:
-        session.cookies.set(
-            cookie["name"],
-            cookie["value"],
-            domain=cookie.get("domain", ""),
-            path=cookie.get("path", "/"),
-        )
-
-    res = session.get(url, timeout=30)
-    res.raise_for_status()
-
-    if "captcha" in res.text.lower() or "radware" in res.text.lower():
-        raise RuntimeError(
-            f"Still blocked even with the cookies saved in {cookie_file!r}. "
-            "Either the session expired, or this site re-validates more "
-            "than just the cookie per request (see note above). Re-run "
-            "a fresh session and try again."
-        )
-
-    return BeautifulSoup(res.content, "html.parser")
-
-
 DEFAULT_PROFILE_DIR = "playwright_profile"
 
 """
@@ -235,7 +171,7 @@ Description: Fetches the page using a real Chromium browser with a
     instructions to rerun non-headless once. This is the recommended
     method since keeping the solve and the scrape in one consistent
     browser identity avoids the TLS/JS fingerprint mismatch that breaks
-    fetch_soup_cached_session.
+    replaying saved cookies through plain requests.
 Param[in] url:                  Page URI to fetch
 Param[in] user_data_dir:        Folder to persist the browser profile in
 Param[in] headless:             Whether to run without a visible window

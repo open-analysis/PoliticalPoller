@@ -8,13 +8,13 @@ Centralized site grab upcoming politician information \
 | `test.sh` | Convenience script: activates the venv, installs dependencies, runs `PoliticalPoller/site_reader.py` |
 | `scripts/` | One run script per function (`find_politician.sh`, `sync_candidates.sh`, `run_election_spider.sh`, `run_news_spider.sh`, `read_page.sh`) plus shared venv setup in `common.sh` |
 | `scrapy.cfg` | Scrapy project config (`settings = PoliticalPoller.settings`), at the repo root |
-| `PoliticalPoller/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch), `find_political_assoc()` (stub) |
+| `PoliticalPoller/site_reader.py` | Entry point / orchestration: `find_politician()`, `read_page()` (legacy one-off fetch) |
 | `PoliticalPoller/spider_runner.py` | `run_news_spider()`, `run_election_spider()`, `sync_election_candidates()` |
 | `PoliticalPoller/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`) |
 | `PoliticalPoller/site_configs.py` | News site configs (selectors, start URLs) used by the news spider |
 | `PoliticalPoller/election_site_configs.py` | Government election site configs (e.g. `mn`) |
 | `PoliticalPoller/election_table_parsers.py` | Shared table parsers (`colspan_hierarchy`, `simple_table`) |
-| `PoliticalPoller/utils.py` | Fetch strategies (requests, cached session, Playwright, persistent browser) and HTML parsing helpers |
+| `PoliticalPoller/utils.py` | Fetch strategies (requests, Playwright, persistent browser) and HTML parsing helpers |
 | `PoliticalPoller/spiders/` | Scrapy spiders: `news_spider.py` (`news`), `election_spider.py` (`elections`) |
 | `PoliticalPoller/{items,pipelines,middlewares,settings}.py` | Scrapy project plumbing |
 | `file_manipulation/file_reader.py` | Planned file readers (stubs) |
@@ -78,7 +78,7 @@ find_politician("Jane Doe", site="mn")
 |---|---|---|
 | `name` | required | Name (or part of a name) to search for |
 | `site` | `"mn"` | Key from `election_site_configs.py` |
-| `project_dir` | `"PoliticalPoller"` | Scrapy project path (see Known Issues) |
+| `project_dir` | `"PoliticalPoller"` | Directory containing the Scrapy project |
 | `store_dir` | `candidate_data` | Where per-site JSON stores live |
 | `headless` | `False` | Browser window visible or not |
 | `force_refresh` | `False` | Skip the cache and scrape live |
@@ -105,7 +105,7 @@ articles = run_news_spider("cnn", candidate="Jane Doe", election="2026", locatio
 from site_reader import read_page
 read_page("https://candidates.sos.mn.gov/", method="persistent_browser")
 ```
-`method` can be `persistent_browser` (default, recommended), `cached_session`, `playwright`, or `requests`. This is the legacy single-site entry point; prefer the functions above.
+`method` can be `persistent_browser` (default, recommended), `playwright`, or `requests`. The persistent browser keeps its solved-CAPTCHA session in `playwright_profile/`, so there is no separate cookie file to manage. This is the legacy single-site entry point; prefer the functions above.
 
 ### Add a new site
 - **Election/candidate site:** add an entry to `ELECTION_SITE_CONFIGS` in `PoliticalPoller/election_site_configs.py` (`state`, `allowed_domains`, `start_urls`, `requires_browser`, `table_parser`, `table_parser_config`). Use `simple_table` with CSS selectors for flat tables or `colspan_hierarchy` for MN-style tables. Start from the states recommended in `2026_state_candidate_list_sources.md`.
@@ -173,7 +173,7 @@ Open issues for:
 
 ### Code gaps
 1. Implement `read_sites_file()` and `read_politician_file()` in `file_manipulation/file_reader.py` (and add the `typing.List` import)
-2. Implement `find_political_assoc()` (office, state, district, party, group affiliations, bills/orders)
+2. Add `find_political_assoc()` back once it is implemented (office, state, district, party, group affiliations, bills/orders)
 3. Generalize `_looks_solved()` / block detection beyond Minnesota
 4. Add a stronger candidate identifier to `candidate_hash()` when a site exposes one (filer ID, district, birth year)
 5. Add tests (the `test/` folder is git-ignored and nothing is checked in)

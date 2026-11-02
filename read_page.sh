@@ -5,7 +5,7 @@ usage() {
     cat << USAGE
 Usage: $0 -u <url> [-m <method>] [--headless|--headed]
   -u, --url        Page to fetch                           [required]
-  -m, --method     persistent_browser | cached_session | playwright | requests
+  -m, --method     persistent_browser | playwright | requests
                                                            [default: persistent_browser]
       --headless   Run the browser without a window        [default]
       --headed     Show the browser window (needed to solve a CAPTCHA)

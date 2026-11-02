@@ -4,7 +4,7 @@ Description: Functions that run the PoliticalPoller project's spiders
     election sites, the equivalent Playwright-based fetch-and-parse path
     -- and return their results as plain lists of dicts. Split out of
     site_reader.py so site_reader.py can stay focused on the
-    find_politician()/find_political_assoc() orchestration layer, and so
+    find_politician() orchestration layer, and so
     other code can import just these spider-running functions without
     pulling in site_reader.py's requests/BeautifulSoup/Playwright fetch
     machinery it doesn't need.

@@ -1,12 +1,11 @@
 """
 Description: Orchestration layer for finding politician/candidate info --
-    find_politician(), find_political_assoc(), and the legacy read_page()
+    find_politician() and the legacy read_page()
     all-in-one entry point. This file intentionally does NOT contain the
     low-level fetch/parse helpers or the spider-running functions
     themselves anymore:
       - utils.py holds the HTTP/browser fetch strategies (fetch_soup,
-        fetch_soup_cached_session, fetch_soup_persistent_browser,
-        fetch_soup_playwright) and the HTML parsing helpers
+        fetch_soup_persistent_browser, fetch_soup_playwright) and the HTML parsing helpers
         (parse_candidates, group_by_office, and their small _cell_text/
         _extract_website/_colspan building blocks)
       - spider_runner.py holds run_news_spider(), run_election_spider(),
@@ -27,10 +26,8 @@ sys.path.append(os.path.dirname(__file__))
 sys.path.append(os.path.join(os.path.dirname(__file__), "PoliticalPoller"))
 
 from utils import (
-    DEFAULT_COOKIE_FILE,
     DEFAULT_PROFILE_DIR,
     fetch_soup,
-    fetch_soup_cached_session,
     fetch_soup_persistent_browser,
     fetch_soup_playwright,
     get_base_url,
@@ -43,7 +40,7 @@ from spider_runner import run_election_spider, run_news_spider, sync_election_ca
 """
 Description: Fetches, parses, and groups the candidate results page in one
     call, choosing among the available fetch strategies (persistent
-    browser, cached session, fresh playwright, or plain requests).
+    browser, fresh playwright, or plain requests).
 
     This is the original, single-site, no-persistence entry point this
     file started with. For anything new, prefer run_election_spider() /
@@ -55,10 +52,9 @@ Description: Fetches, parses, and groups the candidate results page in one
     against a specific URL.
 Param[in] input_webpage:  URI for the webpage to be read
 Param[in] method:         Fetch strategy to use -- "persistent_browser"
-    (default, recommended), "cached_session", "playwright", or "requests"
+    (default, recommended), "playwright", or "requests"
 Param[in] headless:       Used by "persistent_browser"/"playwright"; try
     headless=False once if blocked, to solve manually
-Param[in] cookie_file:    Only used by "cached_session"
 Param[in] user_data_dir:  Only used by "persistent_browser"
 Owner: @open-analysis
 LLM: claude-sonnet-5
@@ -66,15 +62,12 @@ LLM: claude-sonnet-5
 def read_page(input_webpage: str,
     method: str = "persistent_browser",
     headless: bool = True,
-    cookie_file: str = DEFAULT_COOKIE_FILE,
     user_data_dir: str = DEFAULT_PROFILE_DIR,
 ) -> dict:
     if method == "persistent_browser":
         soup = fetch_soup_persistent_browser(
             input_webpage, user_data_dir=user_data_dir, headless=headless
         )
-    elif method == "cached_session":
-        soup = fetch_soup_cached_session(input_webpage, cookie_file=cookie_file)
     elif method == "playwright":
         soup = fetch_soup_playwright(input_webpage, headless=headless)
     elif method == "requests":
@@ -83,7 +76,7 @@ def read_page(input_webpage: str,
     else:
         raise ValueError(
             f"Unknown method: {method!r}. Use 'persistent_browser', "
-            "'cached_session', 'playwright', or 'requests'."
+            "'playwright', or 'requests'."
         )
 
     records = parse_candidates(soup)
@@ -185,4 +178,11 @@ def find_politician(
 
 
 if __name__ == "__main__":
-    find_politician("test")
+    import argparse
+    ap = argparse.ArgumentParser(description="Look up a candidate by name.")
+    ap.add_argument("-n", "--name", required=True)
+    ap.add_argument("-s", "--site", default="mn")
+    ap.add_argument("-r", "--refresh", action="store_true")
+    ap.add_argument("--headless", action="store_true")
+    a = ap.parse_args()
+    find_politician(a.name, site=a.site, headless=a.headless, force_refresh=a.refresh)find_politician("test")
