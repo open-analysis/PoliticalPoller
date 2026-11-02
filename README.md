@@ -13,7 +13,7 @@ Centralized site grab upcoming politician information \
 | `PoliticalPoller/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`); candidate identity, cycles, and review flags |
 | `PoliticalPoller/site_configs.py` | News site configs (selectors, start URLs) used by the news spider |
 | `PoliticalPoller/election_site_configs.py` | Government election site configs (e.g. `mn`) |
-| `tests/test_candidate_store.py` | Scenario tests for candidate identity, splits, cycles, and review flags |
+| `tests/` | pytest unit tests (see Running the Tests) |
 | `PoliticalPoller/election_table_parsers.py` | Shared table parsers (`colspan_hierarchy`, `simple_table`) |
 | `PoliticalPoller/utils.py` | Fetch strategies (requests, Playwright, persistent browser) and HTML parsing helpers |
 | `PoliticalPoller/spiders/` | Scrapy spiders: `news_spider.py` (`news`), `election_spider.py` (`elections`) |
@@ -139,11 +139,36 @@ import candidate_store
 candidate_store.list_review_flags("mn")                       # open flags
 candidate_store.dismiss_review_flag("mn", "72317257942f", "checked, same person")
 ```
-Flags never block a merge on their own, and a dismissed flag is not raised again. Run the scenario tests with `python3 tests/test_candidate_store.py`.
+Flags never block a merge on their own, and a dismissed flag is not raised again.
+
+## Running the Tests
+```bash
+source venv/bin/activate
+pip3 install pytest pytest-cov
+python3 -m pytest                                  # whole suite
+python3 -m pytest tests/test_candidate_store.py    # one file
+python3 -m pytest --cov=PoliticalPoller --cov-report=term-missing
+```
+The suite needs no network, browser, or CAPTCHA: Scrapy callbacks run against canned `HtmlResponse`s, `subprocess.run` and the Playwright fetchers are replaced with fakes, and candidate stores are written to pytest's temp directories.
+
+| File | Covers |
+|---|---|
+| `test_candidate_store.py` | hashing, persistence, upsert, filer IDs, party/website corroboration and splits, cycles, review flags |
+| `test_election_table_parsers.py` | both table parsers, the dispatcher, record stamping |
+| `test_utils.py` | HTML parsing helpers, block detection, `fetch_soup`, `get_base_url` |
+| `test_spiders.py` | `NewsSpider` and `ElectionSpider` callbacks and setup errors |
+| `test_spider_runner.py` | `run_news_spider`, `run_election_spider`, `sync_election_candidates` |
+| `test_site_reader.py` | `read_page` dispatch, `find_politician` cache/refresh behaviour |
+| `test_pipelines.py`, `test_site_configs.py` | validation pipelines; every site config is well-formed |
+
+Not unit-tested: the real-browser fetchers (`fetch_soup_persistent_browser`, `fetch_soup_playwright`), the generated Scrapy `settings.py`/`middlewares.py`, and the `__main__` block. Two tests are marked `xfail(strict=True)` because they document known bugs (see Known Issues); when a bug is fixed its test starts failing until the marker is removed.
 
 ## Known Issues
 - `_looks_solved()` in `utils.py` is hard-coded to `candidates.sos.mn.gov`, so the manual-CAPTCHA flow only works for Minnesota.
 - For sites that expose no filer/candidate ID (Minnesota's config doesn't use one yet), identity is still name + state, backed by the party/website checks above. Two different people with the same name, party, and website domain would still be merged; the cycle-gap flag is the main safeguard.
+
+- `get_base_url()` in `utils.py` cuts the URL off *at* the TLD and drops it (`https://candidates.sos.mn.gov/x` becomes `https://candidates.sos.mn`), so `make_session()`'s warm-up request goes to a host that does not exist. It also raises `TypeError` instead of `UnableToFindBaseUrlError` for an unknown TLD, because the exception requires a `message` argument the call does not pass.
+- With the default `header_td_count` of 6, a `colspan_hierarchy` data row that has 6 cells is silently skipped (it looks like the column-header row). A site config that adds a filer-ID column needs `header_td_count` overridden as well as `data_row_td_count`.
 
 ## Support
 Open issues for:
@@ -200,7 +225,7 @@ Open issues for:
 2. Add `find_political_assoc()` back once it is implemented (office, state, district, party, group affiliations, bills/orders)
 3. Generalize `_looks_solved()` / block detection beyond Minnesota
 4. ~~Add a stronger candidate identifier to `candidate_hash()` when a site exposes one~~ (done: `filer_id`; see Candidate Identity). Still to do: check each state's candidate page for a filer/candidate ID (Minnesota's included) and set `filer_id_selector` / `filer_id_index` where one exists
-5. Add tests (the `test/` folder is git-ignored and nothing is checked in)
+5. ~~Add tests~~ (done: `tests/`). Still to do: add a CI workflow that runs `python3 -m pytest`, and browser-level tests for the Playwright fetchers
 
 ### More sources
 1. Add election site configs for the 32 states with live HTML candidate lists (start with WA, OK, KY, FL, MO, IL, AK; see `2026_state_candidate_list_sources.md`)
