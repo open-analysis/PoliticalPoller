@@ -161,13 +161,12 @@ The suite needs no network, browser, or CAPTCHA: Scrapy callbacks run against ca
 | `test_site_reader.py` | `read_page` dispatch, `find_politician` cache/refresh behaviour |
 | `test_pipelines.py`, `test_site_configs.py` | validation pipelines; every site config is well-formed |
 
-Not unit-tested: the real-browser fetchers (`fetch_soup_persistent_browser`, `fetch_soup_playwright`), the generated Scrapy `settings.py`/`middlewares.py`, and the `__main__` block. Two tests are marked `xfail(strict=True)` because they document known bugs (see Known Issues); when a bug is fixed its test starts failing until the marker is removed.
+Not unit-tested: the real-browser fetchers (`fetch_soup_persistent_browser`, `fetch_soup_playwright`), the generated Scrapy `settings.py`/`middlewares.py`, and the `__main__` block.
 
 ## Known Issues
 - `_looks_solved()` in `utils.py` is hard-coded to `candidates.sos.mn.gov`, so the manual-CAPTCHA flow only works for Minnesota.
 - For sites that expose no filer/candidate ID (Minnesota's config doesn't use one yet), identity is still name + state, backed by the party/website checks above. Two different people with the same name, party, and website domain would still be merged; the cycle-gap flag is the main safeguard.
 
-- `get_base_url()` in `utils.py` cuts the URL off *at* the TLD and drops it (`https://candidates.sos.mn.gov/x` becomes `https://candidates.sos.mn`), so `make_session()`'s warm-up request goes to a host that does not exist. It also raises `TypeError` instead of `UnableToFindBaseUrlError` for an unknown TLD, because the exception requires a `message` argument the call does not pass.
 - With the default `header_td_count` of 6, a `colspan_hierarchy` data row that has 6 cells is silently skipped (it looks like the column-header row). A site config that adds a filer-ID column needs `header_td_count` overridden as well as `data_row_td_count`.
 
 ## Support

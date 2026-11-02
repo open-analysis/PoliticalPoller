@@ -141,24 +141,34 @@ class TestBlockDetection:
 
 # ---------------------------------------------------------------- get_base_url
 class TestGetBaseUrl:
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG: get_base_url() splits AT the TLD and drops it, so "
-        "'https://candidates.sos.mn.gov/x' becomes 'https://candidates.sos.mn' -- "
-        "not a usable warm-up URL for make_session()."))
-    def test_returns_scheme_and_host_including_tld(self):
-        assert utils.get_base_url("https://candidates.sos.mn.gov/results") == "https://candidates.sos.mn.gov"
+    @pytest.mark.parametrize("url,expected", [
+        ("https://candidates.sos.mn.gov/results", "https://candidates.sos.mn.gov"),
+        ("https://candidates.sos.mn.gov", "https://candidates.sos.mn.gov"),
+        ("http://example.org/a/b?x=1#frag", "http://example.org"),
+        ("https://www.cnn.com/sitemap.html", "https://www.cnn.com"),
+        ("https://example.net:8443/x", "https://example.net:8443"),
+        ("https://user:pw@example.com/x", "https://example.com"),
+        ("HTTPS://EXAMPLE.COM/X", "https://example.com"),
+        ("candidates.sos.mn.gov/results", "https://candidates.sos.mn.gov"),
+        ("https://example.gov.uk/page", "https://example.gov.uk"),
+    ])
+    def test_returns_scheme_and_full_host(self, url, expected):
+        assert utils.get_base_url(url) == expected
 
-    @pytest.mark.xfail(strict=True, reason=(
-        "BUG: utils.get_base_url() calls UnableToFindBaseUrlError(url, domain_names) but the "
-        "exception's __init__ also requires `message`, so a TypeError is raised instead."))
-    def test_unknown_tld_raises_the_documented_error(self):
+    @pytest.mark.parametrize("url", [
+        "https://example.xyz/page",
+        "https://example.community/",   # ".com" only as a prefix of another label
+        "https://localhost:8000/",
+        "https://example.io/?next=http://other.com",  # suffix only in the query string
+        "https://example.io/path.com/x",              # suffix only in the path
+        "",
+    ])
+    def test_unrecognized_hosts_raise_the_documented_error(self, url):
         import custom_exceptions
-        with pytest.raises(custom_exceptions.UnableToFindBaseUrlError):
-            utils.get_base_url("https://example.xyz/page")
-
-    def test_current_behaviour_truncates_at_first_known_tld(self):
-        # Characterization of today's behaviour (see the xfail above).
-        assert utils.get_base_url("https://example.org/page") == "https://example"
+        with pytest.raises(custom_exceptions.UnableToFindBaseUrlError) as err:
+            utils.get_base_url(url)
+        assert err.value.url == url and ".gov" in err.value.domain_names
+        assert repr(url) in str(err.value) and "Base URL not found" in str(err.value)
 
 
 # ---------------------------------------------------------------- make_session / fetch_soup
@@ -204,6 +214,20 @@ class TestFetchSoup:
         monkeypatch.setattr(utils, "make_session", lambda base: built.setdefault("base", base) and session)
         utils.fetch_soup("https://a.test/page")
         assert built["base"] == "BASE" and session.calls
+
+
+class TestWarmUpTarget:
+    def test_fetch_soup_warms_up_the_real_host_then_fetches_the_page(self, monkeypatch):
+        import requests
+        urls = []
+
+        def fake_get(self, url, timeout=None):
+            urls.append(url)
+            return FakeResponse()
+
+        monkeypatch.setattr(requests.Session, "get", fake_get)
+        utils.fetch_soup("https://candidates.sos.mn.gov/results")
+        assert urls == ["https://candidates.sos.mn.gov", "https://candidates.sos.mn.gov/results"]
 
 
 class TestMakeSession:

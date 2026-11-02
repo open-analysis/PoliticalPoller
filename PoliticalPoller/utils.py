@@ -25,6 +25,7 @@ LLM: claude-sonnet-5
 import logging
 import time
 import requests
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from playwright_stealth import Stealth
@@ -57,25 +58,31 @@ HEADERS = {
 }
 
 """
-Description: Extracts the base URL (scheme + host, up through the first
-    recognized TLD-ish marker) from a page URL, for use as the warm-up/
-    session target in make_session().
-Param[in] url:  Full page URL
-Param[out] base_url:  The URL truncated at the first of .gov/.com/.org/
-    .net found in it
+Description: Extracts the base URL (scheme + host, including the full
+    domain and any port) from a page URL, for use as the warm-up/session
+    target in make_session(). The host must contain one of the recognized
+    suffixes (.gov/.com/.org/.net) as a whole domain label, so
+    "candidates.sos.mn.gov" and "example.gov.uk" qualify but
+    "example.community" and a ".com" that only appears in the URL's path do
+    not. A URL given without a scheme is treated as https.
+Param[in] url:  Full page URL, e.g. "https://candidates.sos.mn.gov/results"
+Param[out] base_url:  Scheme + host, e.g. "https://candidates.sos.mn.gov"
+Raises UnableToFindBaseUrlError if the host has no recognized suffix.
 Owner: @open-analysis
-LLM: claude-sonnet-5
+LLM: claude-sonnet-5.5
 """
-def get_base_url(url:str) -> str:
+def get_base_url(url: str) -> str:
     domain_names = [".gov", ".com", ".org", ".net"]
-    base_url = ""
-    for domain in domain_names:
-        if domain in url:
-            base_url = url.split(domain, 1)[0]
-            logging.debug(f"Base URL ({base_url}) found")
-            break
-    if base_url == "":
-        raise custom_exceptions.UnableToFindBaseUrlError(url, domain_names)
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host = parsed.hostname or ""
+    host_labels = host.split(".")[1:]
+    if not any(f".{label}" in domain_names for label in host_labels):
+        raise custom_exceptions.UnableToFindBaseUrlError(
+            f"No recognized domain suffix in the host of {url!r}", url, domain_names
+        )
+    port = f":{parsed.port}" if parsed.port else ""
+    base_url = f"{parsed.scheme}://{host}{port}"
+    logging.debug(f"Base URL ({base_url}) found")
     return base_url
 
 """
