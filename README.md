@@ -160,6 +160,9 @@ Flags never block a merge on their own, and a dismissed flag is not raised again
 ```
 It prints the tables it found, how many candidates it parsed, a few samples, and a diagnosis when there are none (no `<table>` means JavaScript; unrecognised headers are listed so you can add them to `header_aliases`; a CAPTCHA page; a paged grid). The exit status is 0 when at least one candidate was parsed.
 
+### Bot-protected sites and `ready_selector`
+A site with `requires_browser: True` is fetched with the persistent Playwright browser. When it shows a CAPTCHA, the browser waits for you to solve it (headed mode) and decides it is solved when the page is on the same host as the URL being fetched, is not a block page, and contains an element matching the site's `ready_selector` (default `"table"`). A site whose real results page has no `<table>` sets its own selector, e.g. `"ready_selector": "div#results"`.
+
 ### `header_table` options
 Set in a site's `table_parser_config` (all optional): `header_aliases` (`{field: [labels]}` for headers it does not know), `table_selector`, `group_rows` (`"office"` or `"office_level"` when the office is a row above its candidates), `skip_office_patterns` (e.g. ballot amendments), `skip_names`. The office is built from the office column plus the district column (`State Senator (6th)`), so the same race in different districts stays distinct.
 
@@ -191,7 +194,6 @@ The suite needs no network, browser, or CAPTCHA: Scrapy callbacks run against ca
 Not unit-tested: the real-browser fetchers (`fetch_soup_persistent_browser`, `fetch_soup_playwright`), the generated Scrapy `settings.py`/`middlewares.py`, and the `__main__` block.
 
 ## Known Issues
-- `_looks_solved()` in `utils.py` is hard-coded to `candidates.sos.mn.gov`, so the manual-CAPTCHA flow only works for Minnesota.
 - For sites that expose no filer/candidate ID (Minnesota's config doesn't use one yet), identity is still name + state, backed by the party/website checks above. Two different people with the same name, party, and website domain would still be merged; the cycle-gap flag is the main safeguard.
 
 - With the default `header_td_count` of 6, a `colspan_hierarchy` data row that has 6 cells is silently skipped (it looks like the column-header row). A site config that adds a filer-ID column needs `header_td_count` overridden as well as `data_row_td_count`.
@@ -248,7 +250,7 @@ Open issues for:
 ### Code gaps
 1. Implement `read_sites_file()` and `read_politician_file()` in `file_manipulation/file_reader.py` (and add the `typing.List` import)
 2. Add `find_political_assoc()` back once it is implemented (office, state, district, party, group affiliations, bills/orders)
-3. Generalize `_looks_solved()` / block detection beyond Minnesota
+3. ~~Generalize `_looks_solved()` beyond Minnesota~~ (done: the host comes from the URL and each site sets a `ready_selector`). Still to do: make the block-page markers (`captcha`, `radware`) configurable per site
 4. ~~Add a stronger candidate identifier to `candidate_hash()` when a site exposes one~~ (done: `filer_id`; see Candidate Identity). Still to do: check each state's candidate page for a filer/candidate ID (Minnesota's included) and set `filer_id_selector` / `filer_id_index` where one exists
 5. ~~Add tests~~ (done: `tests/`). Still to do: add a CI workflow that runs `python3 -m pytest`, and browser-level tests for the Playwright fetchers
 

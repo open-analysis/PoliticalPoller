@@ -32,6 +32,9 @@ LLM: claude-sonnet-5
 #                 before trusting its output.
 #   notes         what the list covers, and known gaps (paging, postbacks,
 #                 election IDs still to pick).
+#   ready_selector  (optional, browser-path sites) CSS selector only the real
+#                 results page contains (default "table"); it is how the
+#                 browser fetcher knows a manually-solved CAPTCHA has cleared.
 #   pagination_hint_regex  (optional) regex with two groups (total items,
 #                 total pages); ElectionSpider warns when a page says there
 #                 are more pages than it fetched, so missing rows are never
@@ -82,6 +85,7 @@ ELECTION_SITE_CONFIGS = {
         # Empty dict -> use parse_colspan_hierarchy_table's defaults,
         # which already match MN's markup (see election_table_parsers.py).
         "table_parser_config": {},
+        "ready_selector": "table",
         "verification": "layout_observed",
         "notes": "Bot-protected (CAPTCHA); run through the browser path. Includes county and local races.",
     },

@@ -171,7 +171,9 @@ def run_election_spider(
 
     if config.get("requires_browser"):
         start_url = config["start_urls"][0]
-        soup = fetch_soup_persistent_browser(start_url, headless=headless)
+        soup = fetch_soup_persistent_browser(
+            start_url, headless=headless, ready_selector=config.get("ready_selector", "table")
+        )
 
         from parsel import Selector
         selector = Selector(text=str(soup))

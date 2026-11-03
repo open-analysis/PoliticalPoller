@@ -114,6 +114,9 @@ class FakePage:
     def content(self):
         return self._content
 
+    def query_selector(self, selector):
+        return BeautifulSoup(self._content, "html.parser").select_one(selector)
+
 
 class TestBlockDetection:
     @pytest.mark.parametrize("text,expected", [
@@ -123,20 +126,162 @@ class TestBlockDetection:
     def test_looks_blocked(self, text, expected):
         assert utils._looks_blocked(text) is expected
 
-    def test_looks_solved_on_results_page(self):
-        assert utils._looks_solved(FakePage("https://candidates.sos.mn.gov/", "<table><tr></tr></table>"))
+    HOST = "candidates.sos.mn.gov"
+
+    def test_solved_on_the_expected_host_with_a_results_table(self):
+        page = FakePage("https://candidates.sos.mn.gov/", "<table><tr></tr></table>")
+        assert utils._looks_solved(page, self.HOST)
+
+    def test_works_for_any_site_not_just_minnesota(self):
+        page = FakePage("https://voter.votewa.gov/CandidateList.aspx?e=899", "<table></table>")
+        assert utils._looks_solved(page, "voter.votewa.gov")
+        assert not utils._looks_solved(page, self.HOST)
+
+    def test_subdomains_of_the_expected_host_count(self):
+        assert utils._looks_solved(FakePage("https://www.example.gov/x", "<table></table>"), "example.gov")
+
+    def test_a_lookalike_host_does_not_count(self):
+        assert not utils._looks_solved(FakePage("https://evilexample.gov/x", "<table></table>"), "example.gov")
+        assert not utils._looks_solved(FakePage("https://example.gov.evil.test/x", "<table></table>"), "example.gov")
 
     def test_not_solved_on_another_host(self):
-        assert not utils._looks_solved(FakePage("https://elsewhere.example/", "<table></table>"))
+        assert not utils._looks_solved(FakePage("https://elsewhere.example/", "<table></table>"), self.HOST)
+
+    def test_host_match_ignores_case_and_port(self):
+        assert utils._looks_solved(FakePage("https://CANDIDATES.sos.mn.gov:443/", "<table></table>"), self.HOST.upper())
 
     def test_not_solved_while_captcha_is_showing(self):
-        assert not utils._looks_solved(FakePage("https://candidates.sos.mn.gov/", "captcha <table></table>"))
+        assert not utils._looks_solved(FakePage("https://candidates.sos.mn.gov/", "captcha <table></table>"), self.HOST)
 
-    def test_not_solved_without_a_results_table(self):
-        assert not utils._looks_solved(FakePage("https://candidates.sos.mn.gov/", "<p>loading</p>"))
+    def test_not_solved_without_the_ready_element(self):
+        assert not utils._looks_solved(FakePage("https://candidates.sos.mn.gov/", "<p>loading</p>"), self.HOST)
 
-    def test_candidate_name_text_counts_as_results(self):
-        assert utils._looks_solved(FakePage("https://candidates.sos.mn.gov/", "Candidate Name"))
+    def test_a_site_can_name_its_own_ready_selector(self):
+        page = FakePage("https://a.example.gov/", "<div id='results'>rows</div>")
+        assert not utils._looks_solved(page, "a.example.gov")                   # default is "table"
+        assert utils._looks_solved(page, "a.example.gov", ready_selector="div#results")
+
+    def test_an_empty_expected_host_never_matches(self):
+        assert not utils._looks_solved(FakePage("https://a.example.gov/", "<table></table>"), "")
+
+
+# ---------------------------------------------------------------- fetch_soup_persistent_browser
+class FakeContext:
+    def __init__(self, page):
+        self.pages, self.closed = [page], False
+
+    def close(self):
+        self.closed = True
+
+
+class ScriptedPage(FakePage):
+    """A page whose HTML changes as the 'human' works: each time.sleep() call advances one step."""
+
+    def __init__(self, steps):
+        super().__init__(steps[0][0], steps[0][1])
+        self.steps, self.step, self.goto_url = steps, 0, None
+
+    def goto(self, url, **kwargs):
+        self.goto_url = url
+
+    def advance(self):
+        self.step = min(self.step + 1, len(self.steps) - 1)
+        self.url, self._content = self.steps[self.step]
+
+
+@pytest.fixture
+def browser(monkeypatch):
+    """Replaces Playwright, the stealth patch, and sleeping; returns a function that scripts one run."""
+    state = {"sleeps": 0}
+
+    class FakeStealth:
+        def apply_stealth_sync(self, context):
+            pass
+
+    def run(steps, **kwargs):
+        page = ScriptedPage(steps)
+        context = FakeContext(page)
+
+        class Chromium:
+            def launch_persistent_context(self, *a, **kw):
+                state["launch"] = kw
+                return context
+
+        class PW:
+            chromium = Chromium()
+
+        class Manager:
+            def __enter__(self):
+                return PW()
+            def __exit__(self, *exc):
+                return False
+
+        def fake_sleep(_):
+            state["sleeps"] += 1
+            page.advance()
+
+        monkeypatch.setattr(utils, "sync_playwright", lambda: Manager())
+        monkeypatch.setattr(utils, "Stealth", FakeStealth)
+        monkeypatch.setattr(utils.time, "sleep", fake_sleep)
+        state.update(page=page, context=context)
+        return state, lambda url="https://candidates.sos.mn.gov/", **kw: utils.fetch_soup_persistent_browser(url, **{**kwargs, **kw})
+    return run
+
+
+RESULTS = "<html><table><tr><td>Jane Doe</td></tr></table></html>"
+CAPTCHA = "<html>Please solve the CAPTCHA</html>"
+MN = "https://candidates.sos.mn.gov/"
+
+
+class TestPersistentBrowser:
+    def test_an_unblocked_page_is_returned_and_the_browser_closed(self, browser):
+        state, fetch = browser([(MN, RESULTS)])
+        soup = fetch()
+        assert "Jane Doe" in soup.text and state["context"].closed and state["sleeps"] == 0
+        assert state["page"].goto_url == MN
+
+    def test_headless_runs_do_not_wait_for_a_human(self, browser):
+        state, fetch = browser([(MN, CAPTCHA)], headless=True)
+        with pytest.raises(RuntimeError, match="headless"):
+            fetch()
+        assert state["context"].closed and state["sleeps"] == 0
+
+    def test_a_headed_run_waits_until_the_captcha_is_solved(self, browser):
+        state, fetch = browser([(MN, CAPTCHA), (MN, CAPTCHA), (MN, CAPTCHA), (MN, RESULTS)], headless=False)
+        soup = fetch()
+        assert "Jane Doe" in soup.text and state["sleeps"] == 3 and state["context"].closed
+
+    def test_solving_on_a_different_site_works_the_same_way(self, browser):
+        votewa = "https://voter.votewa.gov/CandidateList.aspx?e=899"
+        state, fetch = browser([(votewa, CAPTCHA), (votewa, RESULTS)], headless=False)
+        assert "Jane Doe" in fetch(votewa).text
+
+    def test_a_redirect_to_another_host_is_not_a_solve(self, browser):
+        state, fetch = browser([(MN, CAPTCHA), ("https://login.example.test/", RESULTS)],
+                               headless=False, manual_wait_seconds=3)
+        with pytest.raises(TimeoutError, match="Gave up after 3s"):
+            fetch()
+        assert state["context"].closed
+
+    def test_the_wait_is_bounded_by_manual_wait_seconds(self, browser):
+        state, fetch = browser([(MN, CAPTCHA)], headless=False, manual_wait_seconds=5)
+        with pytest.raises(TimeoutError):
+            fetch()
+        assert state["sleeps"] == 5
+
+    def test_a_site_without_a_table_needs_its_own_ready_selector(self, browser):
+        listing = "<html><div id='results'>Jane Doe</div></html>"
+        state, fetch = browser([(MN, CAPTCHA), (MN, listing)], headless=False, manual_wait_seconds=3)
+        with pytest.raises(TimeoutError):
+            fetch()                                                 # default selector "table"
+        state, fetch = browser([(MN, CAPTCHA), (MN, listing)], headless=False, manual_wait_seconds=3,
+                               ready_selector="div#results")
+        assert "Jane Doe" in fetch().text
+
+    def test_profile_dir_and_visibility_are_forwarded_to_the_browser(self, browser):
+        state, fetch = browser([(MN, RESULTS)], user_data_dir="/tmp/prof", headless=False)
+        fetch()
+        assert state["launch"]["headless"] is False
 
 
 # ---------------------------------------------------------------- get_base_url

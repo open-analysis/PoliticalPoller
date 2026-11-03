@@ -6,6 +6,10 @@ import election_table_parsers as ep
 import site_configs as sc
 
 
+def test_browser_sites_declare_how_to_recognise_a_solved_page():
+    assert esc.ELECTION_SITE_CONFIGS["mn"]["ready_selector"] == "table"
+
+
 class TestLookups:
     def test_news_site_lookup(self):
         assert sc.get_site_config("cnn") is sc.SITE_CONFIGS["cnn"]

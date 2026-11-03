@@ -120,6 +120,25 @@ class TestRunElectionSpider:
             ("Jane Doe", "U.S. Senator"), ("John Roe", "U.S. Senator"), ("Jane Doe", "Governor")]
         assert all(r["site"] == "mn" and r["state"] == "Minnesota" and r["scraped_at"] for r in got)
 
+    @pytest.mark.parametrize("override,expected", [(None, "table"), ("div#results", "div#results")])
+    def test_the_sites_ready_selector_is_passed_to_the_browser(self, monkeypatch, mn_html, override, expected):
+        import election_site_configs as esc
+        seen = {}
+
+        def fake_fetch(url, headless=True, **kw):
+            seen.update(kw)
+            return BeautifulSoup(mn_html, "html.parser")
+
+        monkeypatch.setattr(sr, "fetch_soup_persistent_browser", fake_fetch)
+        config = dict(esc.ELECTION_SITE_CONFIGS["mn"])
+        if override:
+            config["ready_selector"] = override
+        else:
+            config.pop("ready_selector", None)           # falls back to the "table" default
+        monkeypatch.setitem(esc.ELECTION_SITE_CONFIGS, "mn", config)
+        sr.run_election_spider("mn", project_dir=PKG)
+        assert seen == {"ready_selector": expected}
+
     def test_unknown_site(self):
         with pytest.raises(ValueError, match="Unknown election site"):
             sr.run_election_spider("nope", project_dir=PKG)

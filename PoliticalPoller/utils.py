@@ -153,21 +153,31 @@ def _looks_blocked(content: str) -> bool:
     return "captcha" in lowered or "radware" in lowered
 
 """
-Description: Returns True if the given Playwright page is on the
-    candidates site, not showing a block page, and appears to contain the
-    real results table -- used to detect when a manually-solved CAPTCHA
-    has cleared.
-Param[in] page:  Live Playwright page object to inspect
+Description: Returns True if the given Playwright page looks like the real
+    results page again, i.e. a manually-solved CAPTCHA has cleared. Site
+    independent: all three of these must hold.
+      - the page is on `expected_host` (or a subdomain of it), so a
+        redirect to a challenge or login host does not count;
+      - the page is not showing a block page (_looks_blocked); and
+      - the page contains an element matching `ready_selector`, e.g. the
+        results table. A site whose real page has no <table> sets its own
+        selector in election_site_configs.py ("ready_selector").
+Param[in] page:            Live Playwright page object to inspect
+Param[in] expected_host:   Hostname the results page is served from, e.g.
+    "candidates.sos.mn.gov"
+Param[in] ready_selector:  CSS selector that only the real page contains
+Param[out] solved:         True when the page looks solved
 Owner: @open-analysis
-LLM: claude-sonnet-5
+LLM: claude-sonnet-5.5
 """
-def _looks_solved(page) -> bool:
-    if "candidates.sos.mn.gov" not in page.url:
+def _looks_solved(page, expected_host: str, ready_selector: str = "table") -> bool:
+    host = (urlparse(page.url).hostname or "").lower()
+    expected = expected_host.lower()
+    if not expected or not (host == expected or host.endswith("." + expected)):
         return False
-    content = page.content()
-    if _looks_blocked(content):
+    if _looks_blocked(page.content()):
         return False
-    return "Candidate Name" in content or "<table" in content.lower()
+    return page.query_selector(ready_selector) is not None
 
 """
 Description: Fetches the page using a real Chromium browser with a
@@ -184,15 +194,20 @@ Param[in] user_data_dir:        Folder to persist the browser profile in
 Param[in] headless:             Whether to run without a visible window
 Param[in] manual_wait_seconds:  Max seconds to wait for a manual CAPTCHA
     solve when headless=False and a block is detected
+Param[in] ready_selector:       CSS selector that only the real results page
+    contains; used to tell when a CAPTCHA has been solved (see
+    _looks_solved). The expected host is taken from `url`.
 Owner: @open-analysis
-LLM: claude-sonnet-5
+LLM: claude-sonnet-5.5
 """
 def fetch_soup_persistent_browser(
     url: str,
     user_data_dir: str = DEFAULT_PROFILE_DIR,
     headless: bool = True,
     manual_wait_seconds: int = 600,
+    ready_selector: str = "table",
 ) -> BeautifulSoup:
+    expected_host = urlparse(url).hostname or ""
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             user_data_dir,
@@ -222,7 +237,7 @@ def fetch_soup_persistent_browser(
             waited = 0
             last_message_at = 0
             while waited < manual_wait_seconds:
-                if _looks_solved(page):
+                if _looks_solved(page, expected_host, ready_selector):
                     print("Looks solved! Continuing...")
                     break
                 if waited - last_message_at >= 15:
