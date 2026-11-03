@@ -120,6 +120,13 @@ class TestUpsertBasics:
         assert r["updated_offices"] == ["Jane Doe -- Governor"]
         assert candidates(r["store"])[0]["offices"]["Governor"]["website"] == "https://old.com/new"
 
+    def test_status_is_stored_and_refreshed(self, store_dir):
+        row = rec("Jane Doe")
+        run(store_dir, [{**row, "status": "Active"}])
+        r = run(store_dir, [{**row, "status": "Withdrawn"}])
+        assert r["updated_offices"] == ["Jane Doe -- Governor"]
+        assert candidates(r["store"])[0]["offices"]["Governor"]["status"] == "Withdrawn"
+
     def test_nothing_is_deleted_when_a_row_disappears(self, store_dir):
         run(store_dir, [rec("Jane Doe"), rec("John Roe")])
         r = run(store_dir, [rec("Jane Doe")])

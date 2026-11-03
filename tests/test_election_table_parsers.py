@@ -129,7 +129,7 @@ class TestDispatchAndStamping:
             ep.parse_table(Selector(text=""), "nope", {})
 
     def test_registered_parsers(self):
-        assert set(ep.PARSERS) == {"colspan_hierarchy", "simple_table"}
+        assert set(ep.PARSERS) == {"colspan_hierarchy", "simple_table", "header_table"}
 
     def test_build_candidate_records_stamps_metadata(self):
         raw = [{"office_level": "L", "office": "O", "candidate_name": "N", "party": "P",

@@ -12,6 +12,7 @@ Centralized site grab upcoming politician information \
 | `PoliticalPoller/candidate_store.py` | Persists candidates to per-site JSON files (`candidate_data/candidates_<site>.json`); candidate identity, cycles, and review flags |
 | `PoliticalPoller/site_configs.py` | News site configs (selectors, start URLs) used by the news spider |
 | `PoliticalPoller/election_site_configs.py` | Government election site configs (e.g. `mn`) |
+| `PoliticalPoller/probe_site.py`, `probe_site.sh` | Check a site config against a live or saved page (see Election Sites) |
 | `tests/` | pytest unit tests (see Running the Tests) |
 | `PoliticalPoller/election_table_parsers.py` | Shared table parsers (`colspan_hierarchy`, `simple_table`) |
 | `PoliticalPoller/utils.py` | Fetch strategies (requests, Playwright, persistent browser) and HTML parsing helpers |
@@ -133,6 +134,37 @@ candidate_store.dismiss_review_flag("mn", "72317257942f", "checked, same person"
 ```
 Flags never block a merge on their own, and a dismissed flag is not raised again.
 
+## Election Sites
+`election_site_configs.py` has a config per state. Fourteen open state sites use the `header_table` parser, which finds columns by their **header text** instead of by position or CSS class, so a reordered or extra column does not break it:
+
+| State | Start URLs | Verified? | Coverage and known gaps |
+|---|---|---|---|
+| WA | `CandidateList.aspx?e=899`, plus `&c=1..40` (one per county) | layout seen | Includes county and local races. Pages 100 rows at a time through a postback that is not performed, so big lists are incomplete (a warning is logged) |
+| OK | `filings.okelections.gov/ViewCandidates/<dates>/99/all` | URL only | County code `99` = all counties. May be JavaScript-rendered |
+| KY | `CandidateFilings/default.aspx?id=1..27`, plus `countyfilings.aspx` | layout seen | `id` is an office category. The county page is a postback form |
+| FL | `CanList.asp?elecid=20261103-GEN` | URL only | No county races; status mapped to `status` |
+| MO, IL | `displaycandidatesplacement.aspx`, `CandidateList.aspx` | URL only | ASP.NET WebForms; the election choice may be a postback |
+| AK | `candidates/?election=26gen` | URL only | `26gen` is inferred from `26prim` |
+| MD, VA, DE | statewide + all-counties (MD), index + local offices (VA), `genl_fcddt_2026.html` (DE) | URL only | VA's index page links to its lists; Excel exports exist and are not read |
+| SD | `candidatelist.aspx?eid=774` | layout seen | General election; `eid=773` is the primary |
+| MT, ND, NM | `CandidateList.aspx?e=`/`eid=` | URL only | The ids are the **primary** ids from the research notes; the general-election ids still need to be found |
+
+**"Layout seen"** means the live page's column headers were read and the config was checked against them (with synthetic data, in `tests/fixtures/`). **"URL only"** means the URL comes from `2026_state_candidate_list_sources.md` and the table layout is *assumed*. I could not fetch raw HTML for these, so selectors were not checked. Run the probe on each before trusting it.
+
+### Checking a site: `probe_site.sh`
+```bash
+./probe_site.sh wa                          # fetch the site's first start URL and parse it
+./probe_site.sh ok --browser                # fetch with Playwright instead (JavaScript pages)
+./probe_site.sh fl --save fl.html           # keep the page as a test fixture
+./probe_site.sh fl --html fl.html           # re-run the parser on a saved page
+```
+It prints the tables it found, how many candidates it parsed, a few samples, and a diagnosis when there are none (no `<table>` means JavaScript; unrecognised headers are listed so you can add them to `header_aliases`; a CAPTCHA page; a paged grid). The exit status is 0 when at least one candidate was parsed.
+
+### `header_table` options
+Set in a site's `table_parser_config` (all optional): `header_aliases` (`{field: [labels]}` for headers it does not know), `table_selector`, `group_rows` (`"office"` or `"office_level"` when the office is a row above its candidates), `skip_office_patterns` (e.g. ballot amendments), `skip_names`. The office is built from the office column plus the district column (`State Senator (6th)`), so the same race in different districts stays distinct.
+
+Records now also carry `status` (Active, Withdrawn, Qualified, ...) when the site shows one. Washington lists withdrawn candidates, so check `status` before treating a row as a current candidate.
+
 ## Running the Tests
 ```bash
 source venv/bin/activate
@@ -146,7 +178,10 @@ The suite needs no network, browser, or CAPTCHA: Scrapy callbacks run against ca
 | File | Covers |
 |---|---|
 | `test_candidate_store.py` | hashing, persistence, upsert, filer IDs, party/website corroboration and splits, cycles, review flags |
-| `test_election_table_parsers.py` | both table parsers, the dispatcher, record stamping |
+| `test_election_table_parsers.py` | the colspan and simple table parsers, the dispatcher, record stamping |
+| `test_header_table.py` | the header-text table parser: column mapping, offices, group rows, nesting |
+| `test_state_configs.py` | the 14 state configs, end to end on fixtures shaped like the WA, KY and SD pages |
+| `test_probe_site.py` | the probe tool and its diagnoses |
 | `test_utils.py` | HTML parsing helpers, block detection, `fetch_soup`, `get_base_url` |
 | `test_spiders.py` | `NewsSpider` and `ElectionSpider` callbacks and setup errors |
 | `test_spider_runner.py` | `run_news_spider`, `run_election_spider`, `sync_election_candidates` |
@@ -218,7 +253,11 @@ Open issues for:
 5. ~~Add tests~~ (done: `tests/`). Still to do: add a CI workflow that runs `python3 -m pytest`, and browser-level tests for the Playwright fetchers
 
 ### More sources
-1. Add election site configs for the 32 states with live HTML candidate lists (start with WA, OK, KY, FL, MO, IL, AK; see `2026_state_candidate_list_sources.md`)
+1. ~~Add election site configs for WA, OK, KY, FL, MO, IL, AK, MD, VA, DE, MT, ND, SD, NM~~ (done, see Election Sites). Still to do:
+    - run `./probe_site.sh <state>` on each "URL only" state and fix its config
+    - find the general-election ids for MT, ND and NM
+    - add postback support for paged or form-driven sites (WA's 100-row pages, KY county filings, MO, IL)
+    - add the remaining ~18 live-HTML states
 2. Add document parsing (PDF/XLSX) for the 16 states that publish only documents; follow landing-page links since filenames change
 3. Handle county-decentralized states (TX, OH)
 4. Test each state site for bot protection and ASP.NET ViewState/postback handling

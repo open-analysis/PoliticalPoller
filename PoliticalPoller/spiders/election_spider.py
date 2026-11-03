@@ -17,6 +17,8 @@ Run directly with:
 LLM: claude-sonnet-5
 """
 
+import re
+
 import scrapy
 
 from PoliticalPoller.items import ElectionCandidateItem
@@ -73,6 +75,7 @@ class ElectionSpider(scrapy.Spider):
         self.start_urls = list(config["start_urls"])
         self.table_parser = config["table_parser"]
         self.table_parser_config = config.get("table_parser_config", {})
+        self.pagination_hint_regex = config.get("pagination_hint_regex")
 
     """
     Description: Scrapy's callback for each start_url response; parses
@@ -89,5 +92,33 @@ class ElectionSpider(scrapy.Spider):
         # site_reader.py, so a Scrapy-crawled site and a browser-fetched
         # site yield identically-shaped records.
         records = build_candidate_records(raw_records, self.site, self.state, response.url)
+        self._warn_if_paged(response, len(records))
         for record in records:
             yield ElectionCandidateItem(**record)
+
+    """
+    Description: Some sites page their candidate grid through a postback
+        this spider does not perform. When the site's config gives a
+        pagination_hint_regex (two groups: total items, total pages) and the
+        page announces more than one page, log a warning and bump the
+        "elections/incomplete_pages" stat, so rows missing from a result are
+        never silent.
+    Param[in] response:  The downloaded Response
+    Param[in] parsed:    How many records were parsed from it
+    Owner: @open-analysis
+    LLM: claude-sonnet-5.5
+    """
+    def _warn_if_paged(self, response, parsed: int):
+        if not self.pagination_hint_regex:
+            return
+        match = re.search(self.pagination_hint_regex, response.text)
+        if not match or int(match.group(2)) <= 1:
+            return
+        self.logger.warning(
+            "%s lists %s items over %s pages but only the first page was fetched "
+            "(%s rows parsed); the result for this URL is incomplete.",
+            response.url, match.group(1), match.group(2), parsed,
+        )
+        stats = getattr(getattr(self, "crawler", None), "stats", None)
+        if stats:
+            stats.inc_value("elections/incomplete_pages")

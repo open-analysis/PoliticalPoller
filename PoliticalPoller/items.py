@@ -41,5 +41,6 @@ class ElectionCandidateItem(scrapy.Item):
     website = scrapy.Field()
     file_date = scrapy.Field()
     filer_id = scrapy.Field()         # site-issued candidate/filer ID, if the site exposes one
+    status = scrapy.Field()           # e.g. Active / Withdrawn / Qualified, if the site shows one
     source_url = scrapy.Field()
     scraped_at = scrapy.Field()       # ISO timestamp, set in the spider

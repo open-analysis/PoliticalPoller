@@ -44,6 +44,15 @@ class TestElectionConfigs:
         for url in cfg["start_urls"]:
             assert any(domain in url for domain in cfg["allowed_domains"])
 
+    def test_declares_how_trustworthy_it_is(self, site):
+        cfg = esc.ELECTION_SITE_CONFIGS[site]
+        assert cfg["verification"] in esc.VERIFICATION_LEVELS
+        assert cfg["notes"].strip()
+
+    def test_no_duplicate_start_urls(self, site):
+        urls = esc.ELECTION_SITE_CONFIGS[site]["start_urls"]
+        assert len(urls) == len(set(urls))
+
     def test_simple_table_configs_have_required_selectors(self, site):
         cfg = esc.ELECTION_SITE_CONFIGS[site]
         if cfg["table_parser"] == "simple_table":

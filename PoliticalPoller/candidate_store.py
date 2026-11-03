@@ -213,7 +213,7 @@ _REVIEW_KEY = "_review"
 # Office-level fields a fresh scrape can update for an already-known
 # office. Not candidate_name/state (the identity itself) or that office's
 # first_seen (set once, the first time we see them running for it).
-_UPDATABLE_OFFICE_FIELDS = ("office_level", "party", "website", "file_date", "source_url", "cycle")
+_UPDATABLE_OFFICE_FIELDS = ("office_level", "party", "website", "file_date", "source_url", "cycle", "status")
 
 
 """
